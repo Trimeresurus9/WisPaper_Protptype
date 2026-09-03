@@ -17,8 +17,9 @@ import {
   Users,
 } from "lucide-react";
 import { StorageUsagePanel } from "./StorageUsagePanel";
+import { ResearchTree } from "./ResearchTree";
 
-type ProjectSection = "files" | "papers" | "surveys" | "agents";
+type ProjectSection = "tree" | "files" | "papers" | "surveys" | "agents";
 type ProjectFilter = "active" | "archived" | "trash";
 
 type Project = {
@@ -30,6 +31,7 @@ type Project = {
   files: number;
   accent: string;
   status: ProjectFilter;
+  canvasTemplate?: string;
 };
 
 const seedProjects: Project[] = [
@@ -42,6 +44,7 @@ const seedProjects: Project[] = [
     files: 18,
     accent: "from-violet-500 to-indigo-600",
     status: "active",
+    canvasTemplate: "demo",
   },
   {
     id: 2,
@@ -76,6 +79,7 @@ const seedProjects: Project[] = [
 ];
 
 const projectTabs: { id: ProjectSection; label: string; icon: React.ElementType }[] = [
+  { id: "tree", label: "科研画布", icon: FolderKanban },
   { id: "files", label: "文件", icon: Folder },
   { id: "papers", label: "论文", icon: FileText },
   { id: "surveys", label: "调研", icon: Search },
@@ -85,10 +89,13 @@ const projectTabs: { id: ProjectSection; label: string; icon: React.ElementType 
 export function ResearchProjects({ onOpenAgent }: { onOpenAgent: () => void }) {
   const [projects, setProjects] = useState(seedProjects);
   const [filter, setFilter] = useState<ProjectFilter>("active");
-  const [selected, setSelected] = useState<Project | null>(null);
-  const [section, setSection] = useState<ProjectSection>("files");
+  const initialProjectId = typeof window !== "undefined" ? window.location.pathname.match(/^\/app\/projects\/(\d+)$/)?.[1] : undefined;
+  const [selected, setSelected] = useState<Project | null>(() => seedProjects.find((project) => String(project.id) === initialProjectId) ?? null);
+  const [section, setSection] = useState<ProjectSection>("tree");
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState("");
+  const [canvasCreationMode, setCanvasCreationMode] = useState<"blank" | "template">("blank");
+  const [selectedTemplate, setSelectedTemplate] = useState("ai-algorithm");
 
   const createProject = () => {
     if (!newTitle.trim()) return;
@@ -101,11 +108,14 @@ export function ResearchProjects({ onOpenAgent }: { onOpenAgent: () => void }) {
       files: 0,
       accent: "from-emerald-400 to-teal-600",
       status: "active",
+      canvasTemplate: canvasCreationMode === "blank" ? "blank" : selectedTemplate,
     };
     setProjects((items) => [project, ...items]);
+    setSelected(project);
     setShowCreate(false);
     setNewTitle("");
     setFilter("active");
+    window.history.pushState({ view: "research-projects", projectId: project.id }, "", `/app/projects/${project.id}`);
   };
 
   if (selected) {
@@ -115,7 +125,7 @@ export function ResearchProjects({ onOpenAgent }: { onOpenAgent: () => void }) {
           <div className="flex items-center justify-between">
             <div className="flex min-w-0 items-center gap-3">
               <button
-                onClick={() => setSelected(null)}
+                onClick={() => { setSelected(null); window.history.pushState({ view: "research-projects" }, "", "/app/projects"); }}
                 className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
                 aria-label="返回项目列表"
               >
@@ -163,9 +173,10 @@ export function ResearchProjects({ onOpenAgent }: { onOpenAgent: () => void }) {
           </nav>
         </header>
 
-        <main className="flex-1 overflow-y-auto bg-[#f7f8fa] p-7">
-          <div className="mx-auto max-w-6xl">
-            <StorageUsagePanel className="mb-6" />
+        <main className="min-h-0 flex-1 overflow-y-auto bg-[#f7f8fa] p-7">
+          <div className={`mx-auto ${section === "tree" ? "h-full max-w-[1500px]" : "max-w-6xl"}`}>
+            {section === "tree" && <ResearchTree projectId={selected.id} projectTitle={selected.title} initialTemplate={selected.canvasTemplate} />}
+            {section !== "tree" && <StorageUsagePanel className="mb-6" />}
             {section === "files" && (
               <div className="rounded-2xl border border-slate-200 bg-white">
                 <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
@@ -307,7 +318,7 @@ export function ResearchProjects({ onOpenAgent }: { onOpenAgent: () => void }) {
               {visibleProjects.map((project) => (
                 <button
                   key={project.id}
-                  onClick={() => setSelected(project)}
+                  onClick={() => { setSelected(project); window.history.pushState({ view: "research-projects", projectId: project.id }, "", `/app/projects/${project.id}`); }}
                   className="group overflow-hidden rounded-2xl border border-slate-200 bg-white text-left transition hover:-translate-y-0.5 hover:shadow-xl"
                 >
                   <div className={`h-2 bg-gradient-to-r ${project.accent}`} />
@@ -339,7 +350,7 @@ export function ResearchProjects({ onOpenAgent }: { onOpenAgent: () => void }) {
 
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-6" onMouseDown={() => setShowCreate(false)}>
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
             <h2 className="text-xl font-semibold">新建研究项目</h2>
             <p className="mt-1 text-sm text-slate-500">项目会集中保存相关资料与 Agent 产物。</p>
             <label className="mt-6 block text-sm font-medium">项目名称</label>
@@ -351,6 +362,24 @@ export function ResearchProjects({ onOpenAgent }: { onOpenAgent: () => void }) {
               placeholder="例如：多模态 Agent 评测"
               className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-400"
             />
+            <p className="mt-6 text-sm font-medium">科研画布</p>
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <button onClick={() => setCanvasCreationMode("blank")} className={`rounded-xl border p-4 text-left ${canvasCreationMode === "blank" ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100" : "border-slate-200 hover:border-slate-300"}`}>
+                <span className="font-medium">空白画布</span><span className="mt-1 block text-xs leading-5 text-slate-500">创建项目后从零开始，也可稍后从模板创建</span>
+              </button>
+              <button onClick={() => setCanvasCreationMode("template")} className={`rounded-xl border p-4 text-left ${canvasCreationMode === "template" ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100" : "border-slate-200 hover:border-slate-300"}`}>
+                <span className="font-medium">从模板创建</span><span className="mt-1 block text-xs leading-5 text-slate-500">使用预置的研究流程与节点结构</span>
+              </button>
+            </div>
+            {canvasCreationMode === "template" && <div className="mt-3 grid grid-cols-2 gap-2">
+              {[
+                ["ai-algorithm", "AI 算法实验", "问题 · 基线 · 训练 · 评测"],
+                ["clinical-trial", "临床实验", "研究假设 · 入排标准 · 终点"],
+                ["literature-review", "系统文献综述", "检索 · 筛选 · 证据综合"],
+                ["data-analysis", "统计数据分析", "数据清理 · 模型 · 结果解释"],
+                ["large-research", "大型科研项目", "多技术路线 · 并行分支 · 里程碑"],
+              ].map(([id, title, description]) => <button key={id} onClick={() => setSelectedTemplate(id)} className={`rounded-xl border px-3 py-3 text-left ${selectedTemplate === id ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 hover:bg-slate-50"}`}><span className="text-sm font-medium">{title}</span><span className={`mt-1 block text-[11px] ${selectedTemplate === id ? "text-slate-300" : "text-slate-400"}`}>{description}</span></button>)}
+            </div>}
             <div className="mt-6 flex justify-end gap-2">
               <button onClick={() => setShowCreate(false)} className="rounded-xl px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">取消</button>
               <button onClick={createProject} disabled={!newTitle.trim()} className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-medium text-white disabled:bg-slate-200">创建项目</button>

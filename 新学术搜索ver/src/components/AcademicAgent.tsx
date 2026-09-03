@@ -5,6 +5,7 @@ import paperReproductionImage from "../assets/agent-cases/paper-reproduction.jpg
 import {
   ArrowUp,
   Ban,
+  BarChart3,
   BookOpen,
   Bot,
   Check,
@@ -15,6 +16,7 @@ import {
   Clock3,
   Code2,
   Cpu,
+  Dna,
   FileText,
   FlaskConical,
   FolderKanban,
@@ -43,7 +45,7 @@ import {
   Zap,
 } from "lucide-react";
 
-type WorkbenchTab = "files" | "search" | "plan" | "gpu";
+type WorkbenchTab = "files" | "search" | "plan" | "gpu" | "bio";
 type AgentTierId = "fast" | "balanced" | "primary" | "deep";
 type AgentTodoStatus = "pending" | "active" | "waiting" | "blocked" | "done" | "skipped" | "failed";
 type AgentTodoType = "agent" | "approval" | "user";
@@ -283,7 +285,19 @@ const tabs: { id: WorkbenchTab; label: string; icon: React.ElementType }[] = [
   { id: "plan", label: "执行计划", icon: Sparkles },
   { id: "files", label: "任务文件", icon: FolderKanban },
   { id: "search", label: "检索结果", icon: Search },
+  { id: "bio", label: "生信", icon: Dna },
   { id: "gpu", label: "运行环境", icon: Cpu },
+];
+
+const bioSkills = [
+  { id: "method", name: "统计方法快速验证", detail: "根据样本量、变量数、数据类型和实验设计检查方法选择", tags: ["场景判断", "统计设计"], icon: FlaskConical },
+  { id: "de", name: "差异表达分析", detail: "RNA-seq、单细胞与蛋白组差异检验及多重校正", tags: ["DESeq2", "limma", "Wilcoxon"], icon: BarChart3 },
+  { id: "survival", name: "生存分析", detail: "Kaplan–Meier、Log-rank、Cox 回归与比例风险检验", tags: ["生存结局", "Cox"], icon: Clock3 },
+  { id: "dimension", name: "降维与可视化", detail: "PCA、UMAP、t-SNE 的选择、参数检查与解释", tags: ["PCA", "UMAP", "t-SNE"], icon: Orbit },
+  { id: "cluster", name: "聚类分析", detail: "层次聚类、K-means、图聚类与稳定性评估", tags: ["无监督", "稳定性"], icon: CircleGauge },
+  { id: "enrichment", name: "功能富集分析", detail: "ORA、GSEA、通路数据库选择与背景集校验", tags: ["GO", "KEGG", "GSEA"], icon: Library },
+  { id: "batch", name: "批次效应校正", detail: "ComBat、Harmony、混合模型及校正前后诊断", tags: ["ComBat", "Harmony"], icon: WandSparkles },
+  { id: "tests", name: "常用统计检验", detail: "参数与非参数检验、效应量、置信区间和功效分析", tags: ["假设检验", "效应量"], icon: GraduationCap },
 ];
 
 const initialAgentTodos: AgentTodo[] = [
@@ -722,6 +736,7 @@ function WorkbenchPanel({
   onToggleRunning,
   onTodoStatusChange,
   onAddTodo,
+  onStartBioSkill,
 }: {
   activeTab: WorkbenchTab;
   running: boolean;
@@ -732,13 +747,61 @@ function WorkbenchPanel({
   onToggleRunning: () => void;
   onTodoStatusChange: (id: string, status: AgentTodoStatus) => void;
   onAddTodo: (title: string) => void;
+  onStartBioSkill: (prompt: string) => void;
 }) {
   const [expandedTodoId, setExpandedTodoId] = useState<string | null>(null);
   const [menuTodoId, setMenuTodoId] = useState<string | null>(null);
   const [addingTodo, setAddingTodo] = useState(false);
   const [newTodoTitle, setNewTodoTitle] = useState("");
+  const [activeBioSkill, setActiveBioSkill] = useState("method");
+  const [bioScenario, setBioScenario] = useState({
+    sampleSize: "medium",
+    variables: "few",
+    dataType: "continuous",
+    groups: "two",
+    design: "independent",
+    distribution: "unknown",
+  });
   const completedCount = todos.filter((todo) => todo.status === "done" || todo.status === "skipped").length;
   const attentionCount = todos.filter((todo) => todo.status === "waiting" || todo.status === "blocked" || todo.status === "failed").length;
+  const bioRecommendation = (() => {
+    const { sampleSize, variables, dataType, groups, design, distribution } = bioScenario;
+    if (dataType === "survival") return {
+      primary: groups === "two" ? "Kaplan–Meier + Log-rank 检验" : "Cox 比例风险回归",
+      alternative: "若比例风险假设不成立，使用分层 Cox、时间依赖 Cox 或 RMST 比较",
+      checks: ["检查删失是否独立", "报告 HR 与 95% CI", "使用 Schoenfeld 残差检验比例风险假设"],
+    };
+    if (dataType === "count") return {
+      primary: variables === "high" ? "DESeq2 / edgeR 负二项模型" : "负二项回归或 Poisson 回归",
+      alternative: "过度离散明显时避免普通 Poisson；零值过多可评估零膨胀模型",
+      checks: ["使用原始 count 而非 TPM 做差异检验", "校正测序深度与批次", "高维比较执行 BH-FDR 校正"],
+    };
+    if (dataType === "categorical") return {
+      primary: sampleSize === "small" ? "Fisher 精确检验" : "卡方检验",
+      alternative: design === "paired" ? "McNemar 检验" : "Logistic 回归（需要协变量校正时）",
+      checks: ["检查期望频数", "同时报告风险比或优势比", "多分类结局考虑多项 Logistic 回归"],
+    };
+    if (design === "repeated") return {
+      primary: "线性混合效应模型",
+      alternative: "分布明显偏态时使用广义线性混合模型或稳健标准误",
+      checks: ["个体作为随机效应", "显式建模时间与组别交互", "避免把重复测量当独立样本"],
+    };
+    if (design === "paired") return {
+      primary: distribution === "normal" ? "配对 t 检验" : "Wilcoxon 符号秩检验",
+      alternative: "存在协变量或多个时间点时使用混合效应模型",
+      checks: ["检验配对差值的分布", "报告配对效应量与置信区间", "缺失配对样本需说明处理策略"],
+    };
+    if (groups === "multiple") return {
+      primary: distribution === "normal" ? "单因素 ANOVA + Tukey 事后检验" : "Kruskal–Wallis + Dunn 事后检验",
+      alternative: "存在协变量时使用 ANCOVA 或多元回归",
+      checks: ["检查方差齐性", "总体检验显著后再做组间比较", "事后比较执行多重校正"],
+    };
+    return {
+      primary: distribution === "normal" && sampleSize !== "small" ? "独立样本 t 检验" : "Mann–Whitney U 检验",
+      alternative: "需要调整年龄、性别或批次时使用线性/广义线性回归",
+      checks: [variables === "high" ? "变量数量高，必须控制 FDR 并考虑降维" : "同时报告效应量和 95% CI", sampleSize === "small" ? "小样本优先展示原始点并谨慎解释 P 值" : "检查异常值与方差齐性", "在分析前明确主要终点"],
+    };
+  })();
 
   const statusMeta: Record<AgentTodoStatus, { label: string; icon: React.ElementType; color: string }> = {
     pending: { label: "待执行", icon: Clock3, color: "text-slate-400" },
@@ -971,6 +1034,96 @@ function WorkbenchPanel({
           </div>
         </section>
       )}
+      {activeTab === "bio" && (
+        <section>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-medium text-emerald-700">Agent Skills</p>
+              <h3 className="mt-1 text-lg font-semibold">生信分析</h3>
+              <p className="mt-1 text-xs leading-5 text-slate-500">选择常用 Skill，或先验证实验场景与统计方法是否匹配。</p>
+            </div>
+            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700">8 Skills</span>
+          </div>
+
+          <div className="mt-5 grid grid-cols-2 gap-2.5">
+            {bioSkills.map((skill) => {
+              const SkillIcon = skill.icon;
+              const active = activeBioSkill === skill.id;
+              return (
+                <button
+                  key={skill.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveBioSkill(skill.id);
+                    if (skill.id === "method") {
+                      onStartBioSkill(`请使用「统计方法快速验证」Skill 帮我确认分析方案。当前场景：样本量=${bioScenario.sampleSize}，变量规模=${bioScenario.variables}，数据类型=${bioScenario.dataType}，组数=${bioScenario.groups}，实验设计=${bioScenario.design}，分布假设=${bioScenario.distribution}。当前初步推荐为「${bioRecommendation.primary}」。请先核对关键前提，再通过对话补充缺失信息。`);
+                    } else {
+                      onStartBioSkill(`请使用「${skill.name}」生信 Skill 帮我开展分析。${skill.detail}。请先询问我的数据类型、样本信息、实验设计和预期产出，再给出可执行的分析流程。`);
+                    }
+                  }}
+                  className={`rounded-xl border p-3 text-left transition ${active ? "border-emerald-300 bg-emerald-50/80 ring-2 ring-emerald-100" : "border-slate-200 bg-white hover:border-slate-300"}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className={`grid h-8 w-8 place-items-center rounded-lg ${active ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"}`}><SkillIcon className="h-4 w-4" /></span>
+                    <span className="text-xs font-semibold leading-4 text-slate-800">{skill.name}</span>
+                  </div>
+                  <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-slate-500">{skill.detail}</p>
+                  <div className="mt-2 flex flex-wrap gap-1">{skill.tags.slice(0, 2).map((tag) => <span key={tag} className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] text-slate-500">{tag}</span>)}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          {activeBioSkill === "method" ? (
+            <div className="mt-5 rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-600 text-white"><FlaskConical className="h-4.5 w-4.5" /></span>
+                <div><h4 className="text-sm font-semibold">统计方法快速验证</h4><p className="mt-0.5 text-[11px] text-slate-500">填写实验条件，即时检查推荐方法</p></div>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                {[
+                  ["sampleSize", "样本数量", [["small", "少于 20"], ["medium", "20–100"], ["large", "大于 100"]]],
+                  ["variables", "变量数量", [["one", "单变量"], ["few", "2–10 个"], ["high", "高维（>100）"]]],
+                  ["dataType", "数据类型", [["continuous", "连续型"], ["count", "计数 / 组学"], ["categorical", "分类变量"], ["survival", "生存结局"]]],
+                  ["groups", "比较组数", [["two", "两组"], ["multiple", "三组及以上"]]],
+                  ["design", "实验设计", [["independent", "独立样本"], ["paired", "配对样本"], ["repeated", "重复测量"]]],
+                  ["distribution", "分布假设", [["normal", "近似正态"], ["non-normal", "明显偏态"], ["unknown", "暂不确定"]]],
+                ].map(([key, label, options]) => (
+                  <label key={key as string} className="block">
+                    <span className="mb-1.5 block text-[10px] font-medium text-slate-500">{label as string}</span>
+                    <select
+                      value={bioScenario[key as keyof typeof bioScenario]}
+                      onChange={(event) => setBioScenario((value) => ({ ...value, [key as string]: event.target.value }))}
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs text-slate-700 outline-none transition focus:border-emerald-400 focus:bg-white"
+                    >
+                      {(options as string[][]).map(([value, text]) => <option key={value} value={value}>{text}</option>)}
+                    </select>
+                  </label>
+                ))}
+              </div>
+              <div className="mt-4 rounded-xl bg-slate-950 p-4 text-white">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-emerald-300">推荐方法</p>
+                <p className="mt-1.5 text-sm font-semibold">{bioRecommendation.primary}</p>
+                <p className="mt-2 text-[11px] leading-5 text-white/65">{bioRecommendation.alternative}</p>
+                <div className="mt-3 border-t border-white/10 pt-3">
+                  {bioRecommendation.checks.map((check) => <p key={check} className="mt-1.5 flex gap-2 text-[10px] leading-4 text-white/70"><CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-emerald-400" />{check}</p>)}
+                </div>
+              </div>
+              <p className="mt-3 text-[10px] leading-4 text-slate-400">建议仅用于快速验证分析方向；正式分析仍需结合抽样机制、缺失数据、混杂因素与预注册方案。</p>
+            </div>
+          ) : (() => {
+            const skill = bioSkills.find((item) => item.id === activeBioSkill)!;
+            const SkillIcon = skill.icon;
+            return <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-slate-950 text-white"><SkillIcon className="h-5 w-5" /></span>
+              <h4 className="mt-3 text-base font-semibold">{skill.name}</h4>
+              <p className="mt-2 text-xs leading-5 text-slate-500">{skill.detail}</p>
+              <div className="mt-4 flex flex-wrap gap-1.5">{skill.tags.map((tag) => <span key={tag} className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700">{tag}</span>)}</div>
+              <button type="button" onClick={() => onStartBioSkill(`请使用「${skill.name}」生信 Skill 帮我开展分析。请通过对话收集样本量、变量数量、数据类型和实验设计。`)} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 py-2.5 text-xs font-semibold text-white hover:bg-slate-800"><Sparkles className="h-3.5 w-3.5" />进入对话使用 Skill</button>
+            </div>;
+          })()}
+        </section>
+      )}
       {activeTab === "gpu" && (
         <GpuConfigPanel />
       )}
@@ -992,6 +1145,7 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
   const [messages, setMessages] = useState<{ role: "user" | "agent"; text: string }[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<AgentTierId>("balanced");
   const [activeCaseTab, setActiveCaseTab] = useState(quickTasks[0].title);
+  const [canvasContextCount, setCanvasContextCount] = useState(0);
   const taskCompleted = planAccepted && todos.every((todo) => todo.status === "done" || todo.status === "skipped");
   const taskNeedsAttention = planAccepted && todos.some((todo) => todo.status === "waiting" || todo.status === "blocked" || todo.status === "failed");
   const activeSamplePrompts = quickTaskSamplePrompts[activeCaseTab] ?? [];
@@ -1013,9 +1167,36 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
     if (taskCompleted || (waitingForUser && !hasActiveTodo)) setRunning(false);
   }, [planAccepted, taskCompleted, todos]);
 
+  const accessCanvasContext = (action: "访问中" | "修改中") => {
+    try {
+      const canvasNodes = JSON.parse(window.localStorage.getItem("wispaper-research-canvas-nodes") || "[]") as Array<{ id: string; title: string }>;
+      setCanvasContextCount(canvasNodes.length);
+      if (canvasNodes.length) {
+        const current = JSON.parse(window.localStorage.getItem("wispaper-canvas-agent-activity") || "{}");
+        const agentName = `切问学术 ${agentTiers.find((tier) => tier.id === selectedAgent)?.label || "Agent"}`;
+        const activeNodeIds = canvasNodes.slice(0, action === "修改中" ? 1 : 2).map((node) => node.id);
+        const activityTimestamp = Date.now();
+        activeNodeIds.forEach((nodeId) => { current[nodeId] = { agentName, action, updatedAt: activityTimestamp }; });
+        window.localStorage.setItem("wispaper-canvas-agent-activity", JSON.stringify(current));
+        window.dispatchEvent(new Event("wispaper-canvas-agent-activity"));
+        window.setTimeout(() => {
+          try {
+            const latest = JSON.parse(window.localStorage.getItem("wispaper-canvas-agent-activity") || "{}");
+            activeNodeIds.forEach((nodeId) => { if (latest[nodeId]?.updatedAt === activityTimestamp) delete latest[nodeId]; });
+            window.localStorage.setItem("wispaper-canvas-agent-activity", JSON.stringify(latest));
+            window.dispatchEvent(new Event("wispaper-canvas-agent-activity"));
+          } catch { /* mock activity cleanup */ }
+        }, 12000);
+      }
+      return canvasNodes.length;
+    } catch { return 0; }
+  };
+
   const submit = (text = prompt) => {
     const value = text.trim();
     if (!value || running) return;
+    const modifiesCanvas = /修改|更新|改写|调整/.test(value) && /科研画布|节点|卡片/.test(value);
+    const canvasNodesRead = accessCanvasContext(modifiesCanvas ? "修改中" : "访问中");
     const startingTask = !started;
     if (startingTask) {
       setTaskTitle(value.length > 32 ? `${value.slice(0, 32)}…` : value);
@@ -1035,7 +1216,7 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
         {
           role: "agent",
           text: startingTask
-            ? "任务已拆解为 5 个步骤。你可以在右侧调整执行计划，确认后我会开始检索与分析。"
+            ? `任务已拆解为 5 个步骤。${canvasNodesRead ? `已读取科研画布中的 ${canvasNodesRead} 个节点作为项目上下文。` : ""}你可以在右侧调整执行计划，确认后我会开始检索与分析。`
             : "已收到补充说明。我会基于当前计划继续处理，并在需要改变执行范围时请你确认。",
         },
       ]);
@@ -1098,6 +1279,19 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
         status: "pending",
       },
     ]);
+  };
+
+  const handleStartBioSkill = (skillPrompt: string) => {
+    const canvasNodesRead = accessCanvasContext("访问中");
+    setPanelOpen(false);
+    setRunning(false);
+    setMessages((items) => [...items, { role: "user", text: skillPrompt }]);
+    window.setTimeout(() => {
+      setMessages((items) => [...items, {
+        role: "agent",
+        text: `已进入生信 Skill 对话流程。${canvasNodesRead ? `已读取科研画布中的 ${canvasNodesRead} 个节点。` : ""}我会先确认研究目的、样本与变量结构、实验设计、缺失值和混杂因素，再与你一起确定统计方法、检验前提与结果报告方式。请先介绍你的实验场景或上传数据说明。`,
+      }]);
+    }, 500);
   };
 
   if (!started) {
@@ -1258,6 +1452,7 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
         <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-100 px-6">
           <h1 className="min-w-0 truncate pr-6 text-[15px] font-semibold">{taskTitle}</h1>
           <div className="flex shrink-0 items-center gap-2 text-xs text-slate-500">
+            {canvasContextCount > 0 && <span className="hidden items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-violet-700 sm:inline-flex"><FolderKanban className="h-3.5 w-3.5" />科研画布 · {canvasContextCount} 节点</span>}
             <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5">
               <span className={`h-2 w-2 rounded-full ${taskCompleted ? "bg-blue-500" : taskNeedsAttention ? "bg-amber-500" : running ? "bg-emerald-500" : "bg-slate-400"}`} />
               {!planReady ? "制定计划" : !planAccepted ? "待确认" : taskCompleted ? "已完成" : taskNeedsAttention ? "等待确认" : running ? "进行中" : "已暂停"}
@@ -1340,7 +1535,7 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
       </main>
 
       {panelOpen && (
-        <aside className={`hidden shrink-0 border-l border-slate-200 bg-[#f7f9fc] lg:block ${activeTab === "gpu" ? "w-[520px] xl:w-[600px]" : "w-[360px]"}`}>
+        <aside className={`hidden shrink-0 border-l border-slate-200 bg-[#f7f9fc] lg:block ${activeTab === "gpu" || activeTab === "bio" ? "w-[520px] xl:w-[600px]" : "w-[360px]"}`}>
           <div className="flex h-16 items-center justify-between border-b border-slate-200 px-5">
             <span className="text-sm font-semibold">{tabs.find((tab) => tab.id === activeTab)?.label}</span>
             <button
@@ -1362,6 +1557,7 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
               onToggleRunning={() => setRunning((value) => !value)}
               onTodoStatusChange={handleTodoStatusChange}
               onAddTodo={handleAddTodo}
+              onStartBioSkill={handleStartBioSkill}
             />
           </div>
         </aside>

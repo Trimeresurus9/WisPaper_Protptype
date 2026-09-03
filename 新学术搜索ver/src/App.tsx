@@ -58,7 +58,7 @@ const getViewFromPath = (pathname: string) => {
   if (pathname === '/landing') return 'home';
   if (pathname === '/app/search' || pathname === '/app/explore' || pathname === '/app/ai-feeds') return 'explore';
   if (pathname === '/scholar-search' || pathname === '/app/scholar-search') return 'list';
-  const match = Object.entries(viewRoutes).find(([, route]) => pathname === route || (route === '/app/paper' && pathname.startsWith('/app/paper/')));
+  const match = Object.entries(viewRoutes).find(([, route]) => pathname === route || (route === '/app/paper' && pathname.startsWith('/app/paper/')) || (route === '/app/projects' && pathname.startsWith('/app/projects/')));
   return match?.[0] ?? 'home';
 };
 
