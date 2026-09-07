@@ -1,9 +1,11 @@
 import React from 'react';
 import { Copy, Play, RotateCcw, TerminalSquare, X } from 'lucide-react';
+import { useBilling } from '../contexts/BillingContext';
 
 interface Scenario { title: string; description: string; input: string; action: 'ask' | 'search' | 'agent' }
 
 interface MockConsoleProps {
+  onOpenBilling: () => void;
   currentView: string;
   userCredits: number;
   onUserCreditsChange: (credits: number) => void;
@@ -35,7 +37,8 @@ const scenarios: Record<string, Scenario[]> = {
   ],
 };
 
-export function MockConsole({ currentView, userCredits, onUserCreditsChange, onAsk, onSearch, onAgent }: MockConsoleProps) {
+export function MockConsole({ currentView, userCredits, onUserCreditsChange, onAsk, onSearch, onAgent, onOpenBilling }: MockConsoleProps) {
+  const { market, setMarket, outcome, setOutcome, scenario } = useBilling();
   const [open, setOpen] = React.useState(false);
   const pageScenarios = scenarios[currentView] ?? [];
   const isAgentPage = currentView === 'academic-agent';
@@ -51,10 +54,20 @@ export function MockConsole({ currentView, userCredits, onUserCreditsChange, onA
     window.dispatchEvent(new Event('wispaper:retrigger-tour'));
   };
 
-  return <div className="fixed bottom-5 right-5 z-[90]">
-    {open && <div className="mb-3 flex max-h-[min(620px,75vh)] w-[390px] flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 text-white shadow-2xl">
+  return <div className="fixed bottom-5 right-5 z-[13000]">
+    {open && <div className="mb-3 flex max-h-[min(720px,80vh)] w-[min(390px,calc(100vw-40px))] flex-col overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 text-white shadow-2xl">
       <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3"><div className="flex items-center gap-2 text-sm font-semibold"><TerminalSquare className="h-4 w-4 text-emerald-400" />Mock 控制台</div><button onClick={() => setOpen(false)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-800"><X className="h-4 w-4" /></button></div>
       <div className="border-b border-slate-800 px-4 py-3 text-xs text-slate-400">当前页面：<span className="font-semibold text-slate-200">{currentView}</span></div>
+      <div className="space-y-3 border-b border-slate-800 p-4">
+        <div className="flex items-center justify-between"><span className="text-sm font-semibold">地区版本</span><button type="button" role="switch" aria-label="国内版" aria-checked={market === 'domestic'} onClick={() => setMarket(market === 'domestic' ? 'overseas' : 'domestic')} className={`relative h-6 w-11 rounded-full ${market === 'domestic' ? 'bg-blue-500' : 'bg-slate-600'}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${market === 'domestic' ? 'left-6' : 'left-1'}`} /></button></div>
+        <div className="grid grid-cols-2 gap-2">{(['domestic', 'overseas'] as const).map((value) => <button key={value} aria-pressed={market === value} onClick={() => setMarket(value)} className={`rounded-lg border px-3 py-2 text-xs ${market === value ? 'border-blue-400 bg-blue-500/20 text-blue-200' : 'border-slate-700 text-slate-400'}`}>{value === 'domestic' ? '国内版 · 支付宝' : '国外版 · Stripe'}</button>)}</div>
+        <p className="text-[11px] leading-5 text-slate-400">独立于语言设置；地区选择刷新后保留，会员与订单仅保留在本次演示会话。</p>
+        <button onClick={() => { setOpen(false); onOpenBilling(); }} className="w-full rounded-lg bg-blue-500 px-3 py-2 text-xs font-semibold text-white">打开支付与订阅</button>
+        {market === 'domestic' && <><div className="grid grid-cols-2 gap-2">{([
+          ['new', '新用户'], ['active', '自动续费已开启'], ['cancelled', '已关闭 · 未到期'], ['failed', '续费失败'], ['expired', '会员已到期'], ['external-cancel', '模拟支付宝侧取消'],
+        ] as const).map(([value, label]) => <button key={value} onClick={() => scenario(value)} className="rounded-lg border border-slate-700 px-2 py-2 text-xs text-slate-300 hover:bg-slate-800">{label}</button>)}</div>
+        <label className="block text-xs text-slate-400">下次模拟支付结果<select value={outcome} onChange={(event) => setOutcome(event.target.value as typeof outcome)} className="mt-2 block w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-slate-200"><option value="success">支付与签约成功</option><option value="payment-failed">支付失败 · 不发放权益</option><option value="sign-failed">支付成功 · 签约失败</option></select></label></>}
+      </div>
       {currentView === 'explore' && <div className="border-b border-slate-800 p-3"><button onClick={retriggerTour} className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-500/40 bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-300"><RotateCcw className="h-3.5 w-3.5" />重新触发首次打开引导</button></div>}
       {isAgentPage && <div className="border-b border-slate-800 p-3"><div className="mb-2 flex items-center justify-between"><span className="text-xs font-semibold text-slate-300">当前积分</span><span className="font-mono text-xs text-emerald-400">{userCredits.toLocaleString()} credits</span></div><div className="grid grid-cols-2 gap-2"><button onClick={() => onUserCreditsChange(50000)} className={`rounded-lg border px-3 py-2 text-xs font-semibold ${userCredits >= 15000 ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-300' : 'border-slate-700 text-slate-400'}`}>积分充足 · 50,000</button><button onClick={() => onUserCreditsChange(12000)} className={`rounded-lg border px-3 py-2 text-xs font-semibold ${userCredits < 15000 ? 'border-amber-500/60 bg-amber-500/15 text-amber-300' : 'border-slate-700 text-slate-400'}`}>积分不足 · 12,000</button></div><p className="mt-2 text-[11px] text-slate-500">Agent 启动门槛 = 任务最低预估 + 5,000 credits</p></div>}
       <div className="space-y-2 overflow-y-auto p-3">

@@ -20,6 +20,7 @@ import { ResearchCanvas } from "./components/ResearchCanvas";
 import { FigureToPPTX } from "./components/FigureToPPTX";
 import { ToolsPage } from "./components/ToolsPage";
 import { MockConsole } from "./components/MockConsole";
+import { BillingProvider } from './contexts/BillingContext';
 import { QuickPaperPage } from "./components/QuickPaperPage";
 import { SearchMoreButton } from "./components/SearchMoreButton";
 import { InviteModal } from "./components/InviteModal";
@@ -327,6 +328,7 @@ export default function App() {
 
   return (
     <LanguageProvider>
+      <BillingProvider>
       <div className={isReaderView ? "h-screen overflow-hidden bg-white flex" : "min-h-screen bg-white flex"}>
         {/* Left Sidebar - Only show in list view, library view, and scholar-qa view */}
         {(viewMode === "explore" || viewMode === "list" || viewMode === "reader" || viewMode === "library" || viewMode === "scholar-qa" || viewMode === "all-feeds" || viewMode === "paper-reproduction" || viewMode === "idea-discovery" || viewMode === "fudan-collection-search" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "truecite" || viewMode === "tools" || viewMode === "figure-to-pptx") && (
@@ -556,6 +558,7 @@ export default function App() {
         />
 
         <MockConsole
+          onOpenBilling={() => setShowPaywallModal(true)}
           currentView={viewMode}
           userCredits={mockUserCredits}
           onUserCreditsChange={setMockUserCredits}
@@ -572,6 +575,7 @@ export default function App() {
           }}
         />
       </div>
+      </BillingProvider>
     </LanguageProvider>
   );
 }

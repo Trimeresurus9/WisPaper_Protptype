@@ -742,7 +742,8 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenRec
       {/* Settings Modal */}
       <SettingsModal 
         isOpen={showSettingsModal} 
-        onClose={() => setShowSettingsModal(false)} 
+        onClose={() => setShowSettingsModal(false)}
+        onOpenPricing={() => { setShowSettingsModal(false); onOpenPaywall?.(); }}
       />
     </aside>
   );

@@ -25,6 +25,8 @@ import {
 } from 'lucide-react';
 import { isValidEmail } from '../utils/email';
 import { StorageManagementSection } from './StorageManagementSection';
+import { domesticPlans, useBilling } from '../contexts/BillingContext';
+import { DomesticAccountBilling } from './DomesticAccountBilling';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -139,6 +141,8 @@ function VoucherFeatureTag({ feature }: { feature: VoucherFeatureId }) {
 }
 
 export function SettingsModal({ isOpen, onClose, onOpenPricing }: SettingsModalProps) {
+  const { market, subscription } = useBilling();
+  const domesticActive = Boolean(subscription.end && new Date(subscription.end).getTime() > Date.now());
   const [activeTab, setActiveTab] = useState<TabType>('membership');
   const [openIdCopied, setOpenIdCopied] = useState(false);
   const openId = 'tyqx1tdh3nwg';
@@ -203,7 +207,7 @@ export function SettingsModal({ isOpen, onClose, onOpenPricing }: SettingsModalP
             </div>
             <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5">
               <span className="text-[11px] text-slate-500">个人账户</span>
-              <span className="rounded-md bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-700">Pro 月度版</span>
+              <span className="rounded-md bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-700">{market === 'domestic' ? domesticActive ? `${domesticPlans.find((plan) => plan.id === subscription.plan)!.name} 月度版` : 'Free' : 'Pro 月度版'}</span>
             </div>
           </div>
 
@@ -250,9 +254,9 @@ export function SettingsModal({ isOpen, onClose, onOpenPricing }: SettingsModalP
           {/* Content */}
           <main className="min-h-0 flex-1 overflow-y-auto bg-white">
             {activeTab === 'basic' && <BasicInformation />}
-            {activeTab === 'membership' && <MembershipPayment onOpenPricing={onOpenPricing} />}
-            {activeTab === 'storage' && <div className="p-8"><div className="mx-auto max-w-3xl"><StorageManagementSection onOpenPricing={onOpenPricing} /></div></div>}
-            {activeTab === 'payment' && <PaymentTab />}
+            {activeTab === 'membership' && <RegionalMembership onOpenPricing={onOpenPricing} />}
+            {activeTab === 'storage' && (market === 'domestic' ? <DomesticAccountBilling storageOnly onOpenPricing={onOpenPricing} /> : <div className="p-8"><div className="mx-auto max-w-3xl"><StorageManagementSection onOpenPricing={onOpenPricing} /></div></div>)}
+            {activeTab === 'payment' && <RegionalOrders onOpenPricing={onOpenPricing} />}
             {activeTab === 'account' && <AccountSettings onFinish={onClose} />}
           </main>
         </section>
@@ -262,6 +266,16 @@ export function SettingsModal({ isOpen, onClose, onOpenPricing }: SettingsModalP
 }
 
 // Basic Information Tab
+function RegionalMembership({ onOpenPricing }: { onOpenPricing?: () => void }) {
+  const { market } = useBilling();
+  return market === 'domestic' ? <DomesticAccountBilling onOpenPricing={onOpenPricing} /> : <MembershipPayment onOpenPricing={onOpenPricing} />;
+}
+
+function RegionalOrders({ onOpenPricing }: { onOpenPricing?: () => void }) {
+  const { market } = useBilling();
+  return market === 'domestic' ? <DomesticAccountBilling ordersOnly onOpenPricing={onOpenPricing} /> : <PaymentTab />;
+}
+
 function BasicInformation() {
   const [name, setName] = useState('张伟');
   const [email, setEmail] = useState('zhangwei@example.com');
