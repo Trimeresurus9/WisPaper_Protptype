@@ -101,6 +101,7 @@ export default function App() {
   const [showDeepSearchTooltip, setShowDeepSearchTooltip] = useState(false);
   const [scholarQAKey, setScholarQAKey] = useState(0);
   const [agentKey, setAgentKey] = useState(0);
+  const [agentTaskActive, setAgentTaskActive] = useState(false);
   const [initialAskQuestion, setInitialAskQuestion] = useState('');
   const [initialAgentPrompt, setInitialAgentPrompt] = useState('');
   const [mockUserCredits, setMockUserCredits] = useState(50000);
@@ -331,7 +332,7 @@ export default function App() {
       <BillingProvider>
       <div className={isReaderView ? "h-screen overflow-hidden bg-white flex" : "min-h-screen bg-white flex"}>
         {/* Left Sidebar - Only show in list view, library view, and scholar-qa view */}
-        {(viewMode === "explore" || viewMode === "list" || viewMode === "reader" || viewMode === "library" || viewMode === "scholar-qa" || viewMode === "all-feeds" || viewMode === "paper-reproduction" || viewMode === "idea-discovery" || viewMode === "fudan-collection-search" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "truecite" || viewMode === "tools" || viewMode === "figure-to-pptx") && (
+        {(viewMode === "explore" || viewMode === "list" || viewMode === "reader" || viewMode === "library" || viewMode === "scholar-qa" || viewMode === "all-feeds" || viewMode === "paper-reproduction" || viewMode === "idea-discovery" || viewMode === "fudan-collection-search" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "truecite" || viewMode === "tools" || viewMode === "figure-to-pptx") && !(viewMode === "academic-agent" && agentTaskActive) && (
           <LeftSidebar
             onNavigate={handleWorkspaceNavigate}
             onOpenInvite={() => setShowInviteModal(true)}
@@ -491,7 +492,16 @@ export default function App() {
           ) : viewMode === "idea-discovery" ? (
             <IdeaDiscovery />
           ) : viewMode === "academic-agent" ? (
-            <AcademicAgent key={agentKey} initialPrompt={initialAgentPrompt} onOpenProjects={() => setViewMode("research-projects")} />
+            <AcademicAgent
+              key={agentKey}
+              initialPrompt={initialAgentPrompt}
+              userCredits={mockUserCredits}
+              onRecharge={() => setShowRechargeModal(true)}
+              onUpgrade={() => setShowPaywallModal(true)}
+              onOpenProjects={() => setViewMode("research-projects")}
+              onTaskActiveChange={setAgentTaskActive}
+              onNavigate={handleWorkspaceNavigate}
+            />
           ) : viewMode === "research-projects" ? (
             <ResearchProjects onOpenAgent={() => setViewMode("academic-agent")} />
           ) : viewMode === "research-canvas" ? (
@@ -557,7 +567,7 @@ export default function App() {
           onClose={() => setShowNotificationDrawer(false)}
         />
 
-        <MockConsole
+        {!(viewMode === "academic-agent" && agentTaskActive) && <MockConsole
           onOpenBilling={() => setShowPaywallModal(true)}
           currentView={viewMode}
           userCredits={mockUserCredits}
@@ -573,7 +583,7 @@ export default function App() {
             setAgentKey((value) => value + 1);
             setViewMode('academic-agent');
           }}
-        />
+        />}
       </div>
       </BillingProvider>
     </LanguageProvider>

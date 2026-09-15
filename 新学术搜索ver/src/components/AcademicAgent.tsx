@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from "react";
-import inspirationDiscoveryImage from "../assets/agent-cases/inspiration-discovery.jpg";
-import literatureReviewImage from "../assets/agent-cases/literature-review.jpg";
-import paperReproductionImage from "../assets/agent-cases/paper-reproduction.jpg";
+import { BrowserResearch } from "./browser-use/BrowserResearch";
 import {
   ArrowUp,
   Ban,
@@ -21,6 +19,7 @@ import {
   FlaskConical,
   FolderKanban,
   GraduationCap,
+  Globe2,
   Image,
   Library,
   LoaderCircle,
@@ -265,11 +264,11 @@ const quickTaskCaseStudies: Record<string, AgentCaseStudy[]> = {
   ],
 };
 
-const quickTaskCaseImages: Record<string, string> = {
-  灵感发现: inspirationDiscoveryImage,
-  论文复现: paperReproductionImage,
-  文献综述: literatureReviewImage,
-};
+const featuredCaseStudies = quickTasks.map((task) => ({
+  ...quickTaskCaseStudies[task.title][0],
+  skill: task.title,
+  icon: task.icon,
+}));
 
 const moreTools = [
   { label: "配置 GPU", icon: Cpu },
@@ -1131,10 +1130,24 @@ function WorkbenchPanel({
   );
 }
 
-export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenProjects: () => void; initialPrompt?: string }) {
-  const [prompt, setPrompt] = useState("");
-  const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
-  const [started, setStarted] = useState(false);
+export function AcademicAgent({ onOpenProjects, initialPrompt = "", onTaskActiveChange, onNavigate, userCredits = 50000, onRecharge, onUpgrade }: { onOpenProjects: () => void; initialPrompt?: string; onTaskActiveChange?: (active: boolean) => void; onNavigate?: (view: string) => void; userCredits?: number; onRecharge?: () => void; onUpgrade?: () => void }) {
+  const [launchContext] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const skill = params.get("skill");
+    return {
+      prompt: params.get("prompt") || "",
+      skill: quickTasks.some((task) => task.title === skill) ? skill : null,
+      projectId: params.get("projectId") || "",
+      projectTitle: params.get("projectTitle") || "",
+      openWorkspace: params.has("workspace"),
+    };
+  });
+  const startingPrompt = initialPrompt.trim() || launchContext.prompt.trim();
+  const [prompt, setPrompt] = useState(startingPrompt);
+  const [selectedSkill, setSelectedSkill] = useState<string | null>(launchContext.skill);
+  const [taskSkill, setTaskSkill] = useState<string | null>(launchContext.skill);
+  const [started, setStarted] = useState(() => launchContext.openWorkspace && Boolean(startingPrompt));
+  useEffect(() => { onTaskActiveChange?.(started); return () => onTaskActiveChange?.(false); }, [started, onTaskActiveChange]);
   const [running, setRunning] = useState(false);
   const [planReady, setPlanReady] = useState(false);
   const [planAccepted, setPlanAccepted] = useState(false);
@@ -1144,14 +1157,13 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
   const [taskTitle, setTaskTitle] = useState("新研究任务");
   const [messages, setMessages] = useState<{ role: "user" | "agent"; text: string }[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<AgentTierId>("balanced");
-  const [activeCaseTab, setActiveCaseTab] = useState(quickTasks[0].title);
   const [canvasContextCount, setCanvasContextCount] = useState(0);
   const taskCompleted = planAccepted && todos.every((todo) => todo.status === "done" || todo.status === "skipped");
   const taskNeedsAttention = planAccepted && todos.some((todo) => todo.status === "waiting" || todo.status === "blocked" || todo.status === "failed");
-  const activeSamplePrompts = quickTaskSamplePrompts[activeCaseTab] ?? [];
-  const activeCaseStudies = quickTaskCaseStudies[activeCaseTab] ?? [];
-  const activeCaseTask = quickTasks.find((task) => task.title === activeCaseTab) ?? quickTasks[0];
-  const activeCaseImage = quickTaskCaseImages[activeCaseTab] ?? inspirationDiscoveryImage;
+  const creditState = userCredits <= 0 ? "empty" : userCredits < 10000 ? "low" : "ok";
+  const projectContext = launchContext.projectId || launchContext.projectTitle
+    ? { id: launchContext.projectId, title: launchContext.projectTitle || "当前研究项目" }
+    : undefined;
 
   const selectQuickTask = (task: QuickTask, includePrompt: boolean) => {
     setSelectedSkill(task.title);
@@ -1192,7 +1204,7 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
     } catch { return 0; }
   };
 
-  const submit = (text = prompt) => {
+  const submit = (text = prompt, skill = selectedSkill) => {
     const value = text.trim();
     if (!value || running) return;
     const modifiesCanvas = /修改|更新|改写|调整/.test(value) && /科研画布|节点|卡片/.test(value);
@@ -1205,11 +1217,13 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
       setTodos(initialAgentTodos.map((todo) => ({ ...todo })));
     }
     setStarted(true);
+    setTaskSkill(skill);
     setPrompt("");
     setSelectedSkill(null);
-    setRunning(true);
+    setRunning(creditState !== "empty");
     setActiveTab("plan");
     setMessages((items) => [...items, { role: "user", text: value }]);
+    if (creditState === "empty") return;
     window.setTimeout(() => {
       setMessages((items) => [
         ...items,
@@ -1230,7 +1244,7 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
   };
 
   useEffect(() => {
-    if (initialPrompt.trim()) submit(initialPrompt);
+    if (startingPrompt && !started) submit(startingPrompt, launchContext.skill);
   }, [initialPrompt]);
 
   const activateNextTodo = (items: AgentTodo[], afterId?: string) => {
@@ -1335,109 +1349,54 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
                   onClearSkill={clearSkill}
                 />
               </div>
+              {projectContext && (
+                <div className="mx-auto mt-3 inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700">
+                  <FolderKanban className="h-3.5 w-3.5" />
+                  当前项目 · {projectContext.title}
+                </div>
+              )}
             </div>
 
-            <section className="mx-auto mt-8 max-w-3xl" aria-label="Skill 案例">
-              <div className="flex flex-wrap justify-center gap-2.5" role="tablist" aria-label="Skill 案例分类">
+            <section className="mx-auto mt-8 max-w-3xl" aria-label="快捷开始">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-slate-900">快捷开始</h2>
+                <span className="text-xs text-slate-400">选择后立即创建任务</span>
+              </div>
+              <div className="mt-3 grid gap-3 md:grid-cols-3">
                 {quickTasks.map((task) => {
                   const Icon = task.icon;
-                  const isActiveCaseTab = activeCaseTab === task.title;
+                  const sample = quickTaskSamplePrompts[task.title][0];
                   return (
-                    <button
-                      key={task.title}
-                      type="button"
-                      role="tab"
-                      id={`agent-case-tab-${task.title}`}
-                      aria-controls={`agent-case-panel-${task.title}`}
-                      onClick={() => {
-                        setActiveCaseTab(task.title);
-                        selectQuickTask(task, true);
-                      }}
-                      className={`group inline-flex items-center gap-2 rounded-full border px-3.5 py-2.5 text-sm transition hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 ${
-                        isActiveCaseTab
-                          ? "border-slate-300 bg-white text-slate-950 shadow-sm"
-                          : "border-slate-200 bg-white/70 text-slate-600 hover:border-slate-300 hover:bg-white hover:text-slate-950"
-                      }`}
-                      aria-selected={isActiveCaseTab}
-                    >
-                      <Icon className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
-                      {task.title}
+                    <button key={task.title} type="button" onClick={() => submit(task.prompt, task.title)} className="group rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_18px_45px_-28px_rgba(15,23,42,0.35)] active:translate-y-0">
+                      <div className="flex items-center justify-between">
+                        <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-900"><Icon className="h-4 w-4 text-blue-500" />{task.title}</span>
+                        <ChevronRight className="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-blue-500" />
+                      </div>
+                      <h3 className="mt-4 text-[15px] font-semibold leading-6 text-slate-800">{sample.title}</h3>
+                      <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-slate-500">{sample.summary}</p>
+                      <span className="mt-4 inline-flex text-xs font-semibold text-blue-600">立即开始</span>
                     </button>
                   );
                 })}
               </div>
 
-              <div
-                id={`agent-case-panel-${activeCaseTab}`}
-                role="tabpanel"
-                aria-labelledby={`agent-case-tab-${activeCaseTab}`}
-                className="mt-6"
-              >
-                <h2 className="text-sm font-semibold text-slate-900">Sample Prompts</h2>
-                <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  {activeSamplePrompts.map((item) => {
-                    return (
-                      <button
-                        key={item.title}
-                        type="button"
-                        onClick={() => {
-                          setSelectedSkill(activeCaseTask.title);
-                          setPrompt(item.prompt);
-                        }}
-                        className="group rounded-2xl border border-slate-200 bg-white/75 p-4 text-left transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white hover:shadow-[0_18px_45px_-28px_rgba(15,23,42,0.35)] active:translate-y-0"
-                      >
-                        <h3 className="text-[15px] font-semibold leading-6 text-slate-900">{item.title}</h3>
-                        <p className="mt-1.5 text-xs leading-5 text-slate-500">{item.summary}</p>
-                      </button>
-                    );
-                  })}
-                </div>
+              <div className="mt-8 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-slate-900">案例回放</h2>
+                <span className="text-xs text-slate-400">打开后从新任务开始</span>
+              </div>
+              <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                {featuredCaseStudies.map((item) => (
+                  <button key={item.title} type="button" onClick={() => submit(item.prompt, item.skill)} className="group flex w-full items-center gap-4 border-b border-slate-100 px-4 py-4 text-left last:border-b-0 hover:bg-slate-50">
+                    <span className="w-20 shrink-0 text-xs font-medium text-blue-600">{item.skill}</span>
+                    <span className="min-w-0 flex-1"><strong className="block truncate text-sm font-semibold text-slate-900">{item.title}</strong><small className="mt-1 block truncate text-xs text-slate-500">{item.outcome}</small></span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-600" />
+                  </button>
+                ))}
+              </div>
 
-                <h2 className="mt-8 text-sm font-semibold text-slate-900">案例</h2>
-                <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  {activeCaseStudies.map((item, index) => {
-                    const StudyIcon = activeCaseTask.icon;
-                    return (
-                      <button
-                        key={item.title}
-                        type="button"
-                        onClick={() => {
-                          setSelectedSkill(activeCaseTask.title);
-                          setPrompt(item.prompt);
-                        }}
-                        className="group flex min-h-[410px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-left transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_22px_55px_-30px_rgba(15,23,42,0.4)] active:translate-y-0"
-                      >
-                        <div className="relative h-40 overflow-hidden bg-slate-100">
-                          <img
-                            src={activeCaseImage}
-                            alt=""
-                            className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-                            style={{ objectPosition: index === 0 ? "left center" : index === 2 ? "right center" : "center" }}
-                          />
-                          <span className="absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-slate-950/90 text-white shadow-sm backdrop-blur">
-                            <StudyIcon className="h-4 w-4" />
-                          </span>
-                          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-xs tabular-nums text-slate-600 shadow-sm backdrop-blur">
-                            <GraduationCap className="h-3.5 w-3.5" />
-                            {item.credits}
-                          </span>
-                        </div>
-                        <div className="px-4 pb-3 pt-4">
-                          <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-600">
-                            {item.field}
-                          </span>
-                        </div>
-                        <div className="flex-1 px-4 pb-4">
-                          <h3 className="text-base font-semibold leading-6 text-slate-900">{item.title}</h3>
-                          <p className="mt-3 text-xs leading-5 text-slate-500">{item.summary}</p>
-                        </div>
-                        <div className="border-t border-slate-100 bg-slate-50/80 px-4 py-3">
-                          <p className="text-xs font-medium leading-5 text-slate-600">{item.outcome}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button type="button" onClick={() => onNavigate?.("figure-to-pptx")} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:border-slate-300 hover:text-slate-950"><Image className="h-3.5 w-3.5" />Fig2PPT</button>
+                <button type="button" onClick={() => onNavigate?.("figure-to-excel")} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:border-slate-300 hover:text-slate-950"><BarChart3 className="h-3.5 w-3.5" />Fig2Excel</button>
               </div>
             </section>
           </div>
@@ -1446,159 +1405,5 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
     );
   }
 
-  return (
-    <div className="flex h-screen min-w-0 flex-1 bg-[#f7f9fc] text-slate-950">
-      <main className="flex min-w-0 flex-1 flex-col bg-white">
-        <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-100 px-6">
-          <h1 className="min-w-0 truncate pr-6 text-[15px] font-semibold">{taskTitle}</h1>
-          <div className="flex shrink-0 items-center gap-2 text-xs text-slate-500">
-            {canvasContextCount > 0 && <span className="hidden items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-violet-700 sm:inline-flex"><FolderKanban className="h-3.5 w-3.5" />科研画布 · {canvasContextCount} 节点</span>}
-            <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5">
-              <span className={`h-2 w-2 rounded-full ${taskCompleted ? "bg-blue-500" : taskNeedsAttention ? "bg-amber-500" : running ? "bg-emerald-500" : "bg-slate-400"}`} />
-              {!planReady ? "制定计划" : !planAccepted ? "待确认" : taskCompleted ? "已完成" : taskNeedsAttention ? "等待确认" : running ? "进行中" : "已暂停"}
-            </span>
-            <span className="hidden items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 sm:inline-flex">
-              <GraduationCap className="h-3.5 w-3.5" />
-              1,250
-            </span>
-            <span className="hidden items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 md:inline-flex">
-              <Moon className="h-3.5 w-3.5" />
-              1h
-            </span>
-            <span className="mx-1 h-5 w-px bg-slate-200" />
-            <button className="rounded-lg p-2 transition hover:bg-slate-100 hover:text-slate-950" aria-label="分享任务">
-              <Share2 className="h-4 w-4" />
-            </button>
-            <button className="rounded-lg p-2 transition hover:bg-slate-100 hover:text-slate-950" aria-label="更多操作">
-              <MoreHorizontal className="h-4 w-4" />
-            </button>
-          </div>
-        </header>
-
-        <section className="relative flex min-h-0 flex-1 flex-col">
-          <div className="flex-1 overflow-y-auto px-5 pb-48 pt-9">
-            <div className="mx-auto max-w-3xl space-y-7">
-              {messages.map((message, index) => (
-                <article key={index} className={message.role === "user" ? "flex justify-end" : ""}>
-                  {message.role === "user" ? (
-                    <div className="max-w-[78%] rounded-[18px] rounded-tr-md bg-[#e6f1ff] px-4 py-3 text-sm leading-6 text-slate-800">
-                      {message.text}
-                    </div>
-                  ) : (
-                    <div>
-                      <div className="mb-3 flex items-center gap-2">
-                        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-950 text-white">
-                          <Bot className="h-3.5 w-3.5" />
-                        </span>
-                        <span className="text-sm font-semibold">切问学术</span>
-                        <span className="rounded-md border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-500">
-                          {agentTiers.find((tier) => tier.id === selectedAgent)?.label}
-                        </span>
-                      </div>
-                      <div className="rounded-[18px] rounded-tl-md bg-slate-50 px-5 py-4 text-[15px] leading-7 text-slate-700">
-                        {message.text}
-                      </div>
-                    </div>
-                  )}
-                </article>
-              ))}
-              {running && !planReady && (
-                <div className="flex items-center gap-3 text-sm text-slate-500">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-950 text-white">
-                    <Bot className="h-3.5 w-3.5" />
-                  </span>
-                  <LoaderCircle className="h-4 w-4 animate-spin" />
-                  正在制定研究计划并选择工具…
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-white via-white to-transparent px-5 pb-3 pt-14">
-            <div className="pointer-events-auto mx-auto max-w-3xl">
-              <AgentComposer
-                prompt={prompt}
-                setPrompt={setPrompt}
-                onSubmit={() => submit()}
-                selectedAgent={selectedAgent}
-                onAgentChange={setSelectedAgent}
-                selectedSkill={selectedSkill}
-                onSelectSkill={selectQuickTask}
-                onClearSkill={clearSkill}
-                disabled={running}
-                compact
-              />
-              <p className="mt-2 text-center text-[10px] text-slate-300">内容由 AI 生成，请仔细甄别</p>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      {panelOpen && (
-        <aside className={`hidden shrink-0 border-l border-slate-200 bg-[#f7f9fc] lg:block ${activeTab === "gpu" || activeTab === "bio" ? "w-[520px] xl:w-[600px]" : "w-[360px]"}`}>
-          <div className="flex h-16 items-center justify-between border-b border-slate-200 px-5">
-            <span className="text-sm font-semibold">{tabs.find((tab) => tab.id === activeTab)?.label}</span>
-            <button
-              onClick={() => setPanelOpen(false)}
-              className="rounded-lg p-1.5 text-slate-500 transition hover:bg-white hover:text-slate-950"
-              aria-label="收起工作台"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="h-[calc(100%_-_4rem)]">
-            <WorkbenchPanel
-              activeTab={activeTab}
-              running={running}
-              planReady={planReady}
-              planAccepted={planAccepted}
-              todos={todos}
-              onAcceptPlan={handleAcceptPlan}
-              onToggleRunning={() => setRunning((value) => !value)}
-              onTodoStatusChange={handleTodoStatusChange}
-              onAddTodo={handleAddTodo}
-              onStartBioSkill={handleStartBioSkill}
-            />
-          </div>
-        </aside>
-      )}
-
-      <aside className="hidden w-14 shrink-0 flex-col items-center border-l border-slate-200 bg-white py-3 lg:flex">
-        <button
-          onClick={() => setPanelOpen((value) => !value)}
-          className={`mb-4 rounded-xl p-2.5 transition ${
-            panelOpen ? "bg-slate-100 text-slate-950" : "text-slate-500 hover:bg-slate-100 hover:text-slate-950"
-          }`}
-          aria-label={panelOpen ? "收起工作台" : "展开工作台"}
-        >
-          <PanelRight className="h-4.5 w-4.5" />
-        </button>
-        <div className="h-px w-6 bg-slate-100" />
-        <nav className="mt-3 flex flex-col gap-2" aria-label="Agent 工具">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const active = panelOpen && activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  setPanelOpen(true);
-                }}
-                className={`group relative rounded-xl p-2.5 transition ${
-                  active ? "bg-slate-950 text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-950"
-                }`}
-                aria-label={tab.label}
-              >
-                <Icon className="h-4.5 w-4.5" />
-                <span className="pointer-events-none absolute right-[calc(100%+8px)] top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-slate-950 px-2 py-1 text-[10px] text-white opacity-0 transition group-hover:opacity-100">
-                  {tab.label}
-                </span>
-              </button>
-            );
-          })}
-        </nav>
-      </aside>
-    </div>
-  );
+  return <BrowserResearch initialTask={messages.find(message => message.role === "user")?.text || startingPrompt} initialSkill={taskSkill || undefined} projectContext={projectContext} userCredits={userCredits} creditState={creditState} onRecharge={onRecharge} onUpgrade={onUpgrade} onNavigate={onNavigate} onBack={() => {setStarted(false); setMessages([]); setPrompt("");}} />;
 }
