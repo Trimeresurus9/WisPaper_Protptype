@@ -52,6 +52,7 @@ const viewRoutes: Record<string, string> = {
   truecite: '/app/truecite',
   tools: '/app/tools',
   'figure-to-pptx': '/app/tools/figure-to-pptx',
+  'figure-to-excel': '/app/tools/figure-to-excel',
 };
 
 const getViewFromPath = (pathname: string) => {
@@ -92,7 +93,7 @@ export default function App() {
     useState<Paper | null>(null);
   const initialView = typeof window !== 'undefined' ? getViewFromPath(window.location.pathname) : 'home';
   const [viewMode, setViewMode] = useState<
-    "home" | "explore" | "list" | "quick-paper" | "detail" | "reader" | "library" | "scholar-qa" | "all-feeds" | "paper-reproduction" | "idea-discovery" | "fudan-collection-search" | "academic-agent" | "research-projects" | "research-canvas" | "truecite" | "tools" | "figure-to-pptx"
+    "home" | "explore" | "list" | "quick-paper" | "detail" | "reader" | "library" | "scholar-qa" | "all-feeds" | "paper-reproduction" | "idea-discovery" | "fudan-collection-search" | "academic-agent" | "research-projects" | "research-canvas" | "truecite" | "tools" | "figure-to-pptx" | "figure-to-excel"
   >(initialView as any);
   const historyNavigationRef = React.useRef(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -332,7 +333,7 @@ export default function App() {
       <BillingProvider>
       <div className={isReaderView ? "h-screen overflow-hidden bg-white flex" : "min-h-screen bg-white flex"}>
         {/* Left Sidebar - Only show in list view, library view, and scholar-qa view */}
-        {(viewMode === "explore" || viewMode === "list" || viewMode === "reader" || viewMode === "library" || viewMode === "scholar-qa" || viewMode === "all-feeds" || viewMode === "paper-reproduction" || viewMode === "idea-discovery" || viewMode === "fudan-collection-search" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "truecite" || viewMode === "tools" || viewMode === "figure-to-pptx") && !(viewMode === "academic-agent" && agentTaskActive) && (
+        {(viewMode === "explore" || viewMode === "list" || viewMode === "reader" || viewMode === "library" || viewMode === "scholar-qa" || viewMode === "all-feeds" || viewMode === "paper-reproduction" || viewMode === "idea-discovery" || viewMode === "fudan-collection-search" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "truecite" || viewMode === "tools" || viewMode === "figure-to-pptx" || viewMode === "figure-to-excel") && !(viewMode === "academic-agent" && agentTaskActive) && (
           <LeftSidebar
             onNavigate={handleWorkspaceNavigate}
             onOpenInvite={() => setShowInviteModal(true)}
@@ -516,12 +517,21 @@ export default function App() {
               </div>
             </div>
           ) : viewMode === "tools" ? (
-            <ToolsPage onOpenTrueCite={() => setViewMode('truecite')} onOpenFigureToPPTX={() => { setFigureToPPTXFromReader(false); setViewMode('figure-to-pptx'); }} />
+            <ToolsPage
+              onOpenTrueCite={() => setViewMode('truecite')}
+              onOpenFigureToPPTX={() => { setFigureToPPTXFromReader(false); setViewMode('figure-to-pptx'); }}
+              onOpenFigureToExcel={() => { setFigureToPPTXFromReader(false); setViewMode('figure-to-excel'); }}
+            />
           ) : viewMode === "figure-to-pptx" ? (
             <FigureToPPTX
               fromReader={figureToPPTXFromReader}
               onBackToTools={() => { setFigureToPPTXFromReader(false); setViewMode('tools'); }}
               onBackToReader={() => { setFigureToPPTXFromReader(false); setViewMode('reader'); }}
+            />
+          ) : viewMode === "figure-to-excel" ? (
+            <FigureToPPTX
+              output="excel"
+              onBackToTools={() => setViewMode('tools')}
             />
           ) : (
             <PaperDetail
