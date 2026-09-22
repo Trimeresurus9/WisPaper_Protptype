@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { X, Zap, Sparkles } from 'lucide-react';
+import React from 'react';
+import { X, Zap } from 'lucide-react';
+import { domesticPlans, domesticTopUpPrice, TOP_UP_CREDITS, useBilling } from '../contexts/BillingContext';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface RechargeModalProps {
   isOpen: boolean;
@@ -7,33 +9,17 @@ interface RechargeModalProps {
 }
 
 export function RechargeModal({ isOpen, onClose }: RechargeModalProps) {
-  const [selectedPack, setSelectedPack] = useState<'mini' | 'pro'>('pro');
+  const { market, subscription } = useBilling();
+  const { language } = useLanguage();
 
   if (!isOpen) return null;
 
-  const packs = [
-    {
-      id: 'mini',
-      name: 'Mini Pack',
-      price: '$5',
-      credits: '1000',
-      bonus: null,
-      icon: <Zap className="w-6 h-6" />,
-      color: 'from-gray-600 to-gray-800',
-      borderColor: 'border-gray-800',
-    },
-    {
-      id: 'pro',
-      name: 'Pro Pack',
-      price: '$10',
-      credits: '2500',
-      bonus: '+25%',
-      icon: <Sparkles className="w-6 h-6" />,
-      color: 'from-gray-700 to-gray-900',
-      borderColor: 'border-gray-900',
-      tag: 'Best Value',
-    },
-  ];
+  const plan = domesticPlans.find((item) => item.id === subscription.plan) ?? domesticPlans[0];
+  const overseasPlanPrice = plan.id === 'plus' ? { zh: 35, en: 5 } : plan.id === 'pro' ? { zh: 150, en: 20 } : { zh: 300, en: 40 };
+  const planCredits = Number(plan.credits.replaceAll(',', ''));
+  const amount = market === 'domestic'
+    ? `¥${domesticTopUpPrice(plan.id).toFixed(2)}`
+    : `${language === 'zh' ? '¥' : '$'}${((overseasPlanPrice[language] / planCredits) * TOP_UP_CREDITS).toFixed(2)}`;
 
   return (
     <>
@@ -63,76 +49,28 @@ export function RechargeModal({ isOpen, onClose }: RechargeModalProps) {
             </div>
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">充值 Credits</h2>
-          <p className="text-gray-600 text-sm">
-            选择合适的充值套餐，立即获取更多积分
-          </p>
+          <p className="text-gray-600 text-sm">唯一充值规格 · 按当前会员订阅单价等比例计算</p>
         </div>
 
         {/* Content */}
         <div className="px-6 py-6">
-          {/* Packs Grid */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            {packs.map((pack) => (
-              <button
-                key={pack.id}
-                onClick={() => setSelectedPack(pack.id as 'mini' | 'pro')}
-                className={`relative p-5 rounded-xl border-2 transition-all text-left ${
-                  selectedPack === pack.id
-                    ? `${pack.borderColor} shadow-lg`
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                {/* Tag */}
-                {pack.tag && (
-                  <div className="absolute -top-2 right-3 px-2 py-0.5 bg-gradient-to-r from-gray-800 to-gray-900 text-white text-xs font-semibold rounded-full">
-                    {pack.tag}
-                  </div>
-                )}
-
-                {/* Icon */}
-                <div className={`inline-flex p-2.5 rounded-lg bg-gradient-to-br ${pack.color} text-white mb-3`}>
-                  {pack.icon}
-                </div>
-
-                {/* Name */}
-                <h3 className="text-lg font-bold text-gray-900 mb-1">
-                  {pack.name}
-                </h3>
-
-                {/* Price */}
-                <div className="text-3xl font-bold text-gray-900 mb-2">
-                  {pack.price}
-                </div>
-
-                {/* Credits */}
-                <div className="flex items-baseline gap-1 mb-1">
-                  <span className="text-2xl font-bold text-gray-900">
-                    {pack.credits}
-                  </span>
-                  <span className="text-sm text-gray-600">Credits</span>
-                </div>
-
-                {/* Bonus */}
-                {pack.bonus && (
-                  <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-900 text-xs font-semibold rounded-full">
-                    <Sparkles className="w-3 h-3" />
-                    <span>Bonus {pack.bonus}</span>
-                  </div>
-                )}
-              </button>
-            ))}
+          <div className="mb-6 rounded-xl border-2 border-gray-900 p-5 text-left shadow-lg">
+            <div className="mb-3 inline-flex rounded-lg bg-gradient-to-br from-gray-700 to-gray-900 p-2.5 text-white"><Zap className="h-6 w-6" /></div>
+            <div className="flex items-start justify-between gap-4"><div><h3 className="text-lg font-bold text-gray-900">10K Credits Pack</h3><p className="mt-1 text-sm text-gray-500">{plan.name} 会员价</p></div><div className="text-3xl font-bold text-gray-900">{amount}</div></div>
+            <div className="mt-5 flex items-baseline gap-1"><span className="text-2xl font-bold text-gray-900">{TOP_UP_CREDITS.toLocaleString()}</span><span className="text-sm text-gray-600">Credits</span></div>
+            <p className="mt-3 text-xs leading-5 text-gray-500">订阅价格 ÷ 每月 Credits × 10,000 · 一次性购买</p>
           </div>
 
           {/* Purchase Button */}
           <button
             className="w-full py-3.5 bg-gradient-to-r from-gray-900 to-black hover:from-gray-800 hover:to-gray-900 text-white rounded-lg font-semibold text-base transition-all shadow-lg hover:shadow-xl"
           >
-            立即充值 {packs.find(p => p.id === selectedPack)?.price}
+            立即充值 {amount}
           </button>
 
           {/* Info */}
           <div className="mt-4 text-center text-xs text-gray-500">
-            <p>充值后积分立即到账 • 安全支付由 Stripe 提供</p>
+            <p>充值后积分立即到账 · {market === 'domestic' ? '支付宝模拟支付' : 'Stripe 模拟支付'}</p>
           </div>
         </div>
       </div>

@@ -58,7 +58,7 @@ const translations: Record<Language, Record<string, string>> = {
     'user.logout': '退出登录',
     'user.membership': '会员信息',
     'user.invite': '邀请好友',
-    'user.feedback': '反馈',
+    'user.feedback': '反馈工单',
     
     // Notifications
     'notifications.title': '消息与通知',
@@ -718,7 +718,7 @@ const translations: Record<Language, Record<string, string>> = {
     'user.logout': 'Logout',
     'user.membership': 'Membership Info',
     'user.invite': 'Invite Friends',
-    'user.feedback': 'Feedback',
+    'user.feedback': 'Feedback ticket',
     
     // Notifications
     'notifications.title': 'Messages & Notifications',

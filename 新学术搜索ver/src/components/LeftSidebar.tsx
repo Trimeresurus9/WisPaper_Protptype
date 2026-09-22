@@ -10,6 +10,7 @@ interface LeftSidebarProps {
   onNavigate?: (view: string) => void;
   onOpenInvite?: () => void;
   onOpenPaywall?: () => void;
+  onOpenUpgradePricing?: () => void;
   onOpenRecharge?: () => void;
   onOpenNotifications?: () => void;
   onNewScholarQA?: () => void;
@@ -82,7 +83,7 @@ const llmsItems: LLMSItem[] = [
   { id: 'satellite', title: 'Satellite Programing' },
 ];
 
-export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenRecharge, onOpenNotifications, onNewScholarQA, onResetSearch, currentView }: LeftSidebarProps = {}) {
+export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenUpgradePricing, onOpenRecharge, onOpenNotifications, onNewScholarQA, onResetSearch, currentView }: LeftSidebarProps = {}) {
   const [activeNav, setActiveNav] = useState('all-feeds');
   const [showMyLibrary, setShowMyLibrary] = useState(false);
   const [showLLMSSection, setShowLLMSSection] = useState(false);
@@ -743,7 +744,7 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenRec
       <SettingsModal 
         isOpen={showSettingsModal} 
         onClose={() => setShowSettingsModal(false)}
-        onOpenPricing={() => { setShowSettingsModal(false); onOpenPaywall?.(); }}
+        onOpenPricing={(source) => { setShowSettingsModal(false); if (source === 'upgrade') onOpenUpgradePricing?.(); else onOpenPaywall?.(); }}
       />
     </aside>
   );

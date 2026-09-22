@@ -98,6 +98,11 @@ export default function App() {
   const historyNavigationRef = React.useRef(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
+  const [pricingSource, setPricingSource] = useState<'general' | 'account-upgrade'>('general');
+  const openPricing = (source: 'general' | 'account-upgrade' = 'general') => {
+    setPricingSource(source);
+    setShowPaywallModal(true);
+  };
   const [showRechargeModal, setShowRechargeModal] = useState(false);
   const [showDeepSearchTooltip, setShowDeepSearchTooltip] = useState(false);
   const [scholarQAKey, setScholarQAKey] = useState(0);
@@ -337,7 +342,8 @@ export default function App() {
           <LeftSidebar
             onNavigate={handleWorkspaceNavigate}
             onOpenInvite={() => setShowInviteModal(true)}
-            onOpenPaywall={() => setShowPaywallModal(true)}
+            onOpenPaywall={() => openPricing()}
+            onOpenUpgradePricing={() => openPricing('account-upgrade')}
             onOpenRecharge={() => setShowRechargeModal(true)}
             onOpenNotifications={() => setShowNotificationDrawer(true)}
             onNewScholarQA={handleResetScholarQA}
@@ -352,7 +358,7 @@ export default function App() {
             <HomePage
               onNavigateToWorkspace={() => setViewMode("explore")}
               onNavigate={(view) => setViewMode(view as any)}
-              onOpenPricing={() => setShowPaywallModal(true)}
+              onOpenPricing={() => openPricing()}
               onOpenRecharge={() => setShowRechargeModal(true)}
               onStartSearch={handleStartSearchFromHome}
             />
@@ -472,7 +478,7 @@ export default function App() {
                 setViewMode("academic-agent");
               }}
               userCredits={mockUserCredits}
-              onUpgrade={() => setShowPaywallModal(true)}
+              onUpgrade={() => openPricing()}
             />
           ) : viewMode === "all-feeds" ? (
             <AllFeedsWorkspace
@@ -498,7 +504,7 @@ export default function App() {
               initialPrompt={initialAgentPrompt}
               userCredits={mockUserCredits}
               onRecharge={() => setShowRechargeModal(true)}
-              onUpgrade={() => setShowPaywallModal(true)}
+              onUpgrade={() => openPricing()}
               onOpenProjects={() => setViewMode("research-projects")}
               onTaskActiveChange={setAgentTaskActive}
               onNavigate={handleWorkspaceNavigate}
@@ -562,6 +568,7 @@ export default function App() {
         {/* Paywall Modal */}
         <PaywallModal
           isOpen={showPaywallModal}
+          upgradeOnly={pricingSource === 'account-upgrade'}
           onClose={() => setShowPaywallModal(false)}
         />
 
@@ -578,7 +585,7 @@ export default function App() {
         />
 
         {!(viewMode === "academic-agent" && agentTaskActive) && <MockConsole
-          onOpenBilling={() => setShowPaywallModal(true)}
+          onOpenBilling={() => openPricing()}
           currentView={viewMode}
           userCredits={mockUserCredits}
           onUserCreditsChange={setMockUserCredits}

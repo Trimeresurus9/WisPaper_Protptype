@@ -31,7 +31,7 @@ import { DomesticAccountBilling } from './DomesticAccountBilling';
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onOpenPricing?: () => void;
+  onOpenPricing?: (source?: 'upgrade' | 'general') => void;
 }
 
 type TabType = 'basic' | 'membership' | 'storage' | 'payment' | 'account';
@@ -151,7 +151,7 @@ export function SettingsModal({ isOpen, onClose, onOpenPricing }: SettingsModalP
     { id: 'basic' as const, label: '个人资料', icon: User },
     { id: 'storage' as const, label: '存储空间', icon: HardDrive },
     { id: 'payment' as const, label: '订单与账单', icon: CreditCard },
-    { id: 'account' as const, label: '安全设置', icon: Settings },
+    { id: 'account' as const, label: '设置', icon: Settings },
   ];
   const activePage = navigationItems.find((item) => item.id === activeTab) ?? navigationItems[0];
 
@@ -207,7 +207,7 @@ export function SettingsModal({ isOpen, onClose, onOpenPricing }: SettingsModalP
             </div>
             <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5">
               <span className="text-[11px] text-slate-500">个人账户</span>
-              <span className="rounded-md bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-700">{market === 'domestic' ? domesticActive ? `${domesticPlans.find((plan) => plan.id === subscription.plan)!.name} 月度版` : 'Free' : 'Pro 月度版'}</span>
+              <span className="rounded-md bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-700">{market === 'domestic' ? domesticActive ? `${domesticPlans.find((plan) => plan.id === subscription.plan)!.name} ${subscription.renewalPeriod === 'annual' ? '年付版' : '月度版'}` : 'Free' : 'Pro 月度版'}</span>
             </div>
           </div>
 
@@ -266,12 +266,12 @@ export function SettingsModal({ isOpen, onClose, onOpenPricing }: SettingsModalP
 }
 
 // Basic Information Tab
-function RegionalMembership({ onOpenPricing }: { onOpenPricing?: () => void }) {
+function RegionalMembership({ onOpenPricing }: { onOpenPricing?: (source?: 'upgrade' | 'general') => void }) {
   const { market } = useBilling();
   return market === 'domestic' ? <DomesticAccountBilling onOpenPricing={onOpenPricing} /> : <MembershipPayment onOpenPricing={onOpenPricing} />;
 }
 
-function RegionalOrders({ onOpenPricing }: { onOpenPricing?: () => void }) {
+function RegionalOrders({ onOpenPricing }: { onOpenPricing?: (source?: 'upgrade' | 'general') => void }) {
   const { market } = useBilling();
   return market === 'domestic' ? <DomesticAccountBilling ordersOnly onOpenPricing={onOpenPricing} /> : <PaymentTab />;
 }

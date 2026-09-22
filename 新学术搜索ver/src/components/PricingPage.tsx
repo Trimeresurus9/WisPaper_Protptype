@@ -2,7 +2,7 @@ import { PricingStyles } from './PricingStyles';
 import React from 'react';
 import { Check, ChevronDown, HelpCircle, Minus } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { useBilling } from '../contexts/BillingContext';
+import { TOP_UP_CREDITS, useBilling } from '../contexts/BillingContext';
 import { DomesticBilling } from './DomesticBilling';
 
 type BillingCycle = 'monthly' | 'annual';
@@ -37,6 +37,8 @@ const formatCurrency = (amount: number, language: 'zh' | 'en') => {
   });
   return language === 'zh' ? `¥${formattedAmount}` : `$${formattedAmount}`;
 };
+
+const roundMoney = (amount: number) => Math.round((amount + 1e-9) * 100) / 100;
 
 const formatPlanPrice = (
   price: LocalizedPrice,
@@ -91,11 +93,6 @@ const formatStoragePrice = (
 };
 
 const copy = (text: LocalizedText, language: 'zh' | 'en') => text[language];
-
-const miniPack = {
-  price: { zh: 14, en: 1.99 },
-  credits: '10,000',
-};
 
 const planPrices = {
   free: {
@@ -245,11 +242,12 @@ function PlanStorageSelector({
 interface PricingPageProps {
   onOpenRecharge?: () => void;
   language?: 'zh' | 'en';
+  upgradeOnly?: boolean;
 }
 
-export function PricingPage({ onOpenRecharge, language: controlledLanguage }: PricingPageProps) {
+export function PricingPage({ onOpenRecharge, language: controlledLanguage, upgradeOnly = false }: PricingPageProps) {
   const { market } = useBilling();
-  if (market === 'domestic') return <DomesticBilling />;
+  if (market === 'domestic') return <DomesticBilling upgradeOnly={upgradeOnly} />;
   return <InternationalPricingPage onOpenRecharge={onOpenRecharge} language={controlledLanguage} />;
 }
 
@@ -258,6 +256,7 @@ function InternationalPricingPage({ onOpenRecharge, language: controlledLanguage
   const language = controlledLanguage ?? contextLanguage;
   const [billingCycle, setBillingCycle] = React.useState<BillingCycle>('monthly');
   const [maxTier, setMaxTier] = React.useState<MaxTier>('x2');
+  const [topUpPlan, setTopUpPlan] = React.useState<'plus' | 'pro' | 'maxX2' | 'maxX5'>('pro');
   const [openStoragePlan, setOpenStoragePlan] = React.useState<StoragePlanKey | null>(null);
   const [planStorage, setPlanStorage] = React.useState<Record<StoragePlanKey, number>>({
     pro: 50,
@@ -271,6 +270,17 @@ function InternationalPricingPage({ onOpenRecharge, language: controlledLanguage
   const activeMaxBaseStorage = maxTier === 'x2' ? 100 : 250;
   const activeMaxStorage = planStorage[activeMaxStorageKey];
   const activeMaxName = maxTier === 'x2' ? 'Max x2' : 'Max x5';
+  const topUpPlans = {
+    plus: { name: 'Plus', price: planPrices.plus.monthly, credits: 20_000 },
+    pro: { name: 'Pro', price: planPrices.pro.monthly, credits: 200_000 },
+    maxX2: { name: 'Max x2', price: maxPlans.x2.price, credits: 400_000 },
+    maxX5: { name: 'Max x5', price: maxPlans.x5.price, credits: 1_000_000 },
+  };
+  const activeTopUpPlan = topUpPlans[topUpPlan];
+  const topUpPrice: LocalizedPrice = {
+    zh: roundMoney((activeTopUpPlan.price.zh / activeTopUpPlan.credits) * TOP_UP_CREDITS),
+    en: roundMoney((activeTopUpPlan.price.en / activeTopUpPlan.credits) * TOP_UP_CREDITS),
+  };
 
   return (
     <div className="uber-pricing-page">
@@ -316,7 +326,7 @@ function InternationalPricingPage({ onOpenRecharge, language: controlledLanguage
               <div className="info-list">
                 <div className="info-row">
                   <InfoLabel label={text({ zh: '每月积分', en: 'Monthly credits' })} tooltip={text({ zh: '按订阅周期发放，到期后未使用余额将清零。', en: 'Issued per billing cycle. Unused balance expires when the cycle ends.' })} language={language} />
-                  <strong>10,000</strong>
+                  <strong>20,000</strong>
                 </div>
                 <div className="info-row">
                   <InfoLabel label={text({ zh: '基础高速存储', en: 'Base high-speed storage' })} tooltip={text({ zh: '新上传文件默认进入高速存储，保留满 6 个月后自动转入归档存储。', en: 'New uploads enter high-speed storage and move to archive storage after six months.' })} language={language} />
@@ -461,12 +471,12 @@ function InternationalPricingPage({ onOpenRecharge, language: controlledLanguage
             <div className="recharge-products-grid">
               <article className="plan mini-pack">
               <div className="plan-title-row">
-                <h3>Mini Pack</h3>
+                <h3>10K Credits Pack</h3>
               </div>
-              <p className="plan-subtitle">{text({ zh: '按需补充积分，适合临时高峰任务', en: 'Add credits on demand for temporary workload spikes' })}</p>
+              <p className="plan-subtitle">{text({ zh: '唯一充值规格，价格按会员月度订阅单价等比例计算', en: 'One top-up size, priced proportionally to each plan’s monthly subscription rate' })}</p>
               <div className="price-action">
-                <p className="price"><strong>{formatPlanPrice(miniPack.price, language)}</strong><span>{text({ zh: '一次性', en: 'one-time' })}</span></p>
-                <p className="muted">{miniPack.credits} Credits</p>
+                <p className="price"><strong>{formatPlanPrice(topUpPrice, language)}</strong><span>{text({ zh: `一次性 · ${activeTopUpPlan.name} 会员价`, en: `one-time · ${activeTopUpPlan.name} member price` })}</span></p>
+                <p className="muted">{TOP_UP_CREDITS.toLocaleString()} Credits</p>
                 <a
                   className="plan-cta"
                   href="#"
@@ -478,14 +488,22 @@ function InternationalPricingPage({ onOpenRecharge, language: controlledLanguage
                   {text({ zh: '立即充值', en: 'Recharge now' })}
                 </a>
               </div>
+              <label className="mt-4 block text-sm text-slate-600">{text({ zh: '会员计价等级', en: 'Member pricing tier' })}
+                <select aria-label={text({ zh: '充值包会员计价等级', en: 'Top-up member pricing tier' })} value={topUpPlan} onChange={(event) => setTopUpPlan(event.target.value as typeof topUpPlan)} className="mt-2 w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-900">
+                  {Object.entries(topUpPlans).map(([id, plan]) => {
+                    const price = roundMoney((plan.price[language] / plan.credits) * TOP_UP_CREDITS);
+                    return <option key={id} value={id}>{plan.name} · {formatCurrency(price, language)}</option>;
+                  })}
+                </select>
+              </label>
               <div className="info-list">
                 <div className="info-row">
                   <span className="uber-info-label">{text({ zh: '包含积分', en: 'Credits included' })}</span>
-                  <strong>{miniPack.credits}</strong>
+                  <strong>{TOP_UP_CREDITS.toLocaleString()}</strong>
                 </div>
                 <div className="info-row">
-                  <span className="uber-info-label">{text({ zh: '购买类型', en: 'Purchase type' })}</span>
-                  <strong>{text({ zh: '一次性购买', en: 'One-time purchase' })}</strong>
+                  <span className="uber-info-label">{text({ zh: '定价公式', en: 'Pricing formula' })}</span>
+                  <strong>{text({ zh: '订阅价 ÷ 月度积分 × 10,000', en: 'Plan price ÷ monthly credits × 10,000' })}</strong>
                 </div>
                 <div className="info-row">
                   <span className="uber-info-label">{text({ zh: '有效期', en: 'Validity' })}</span>

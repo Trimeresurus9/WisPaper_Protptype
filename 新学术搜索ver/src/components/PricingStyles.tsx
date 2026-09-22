@@ -100,6 +100,163 @@ export function PricingStyles() {
           box-shadow: none;
         }
 
+        .uber-pricing-page .billing-toggle button:disabled {
+          cursor: not-allowed;
+          color: #a5adba;
+          opacity: 0.62;
+        }
+
+        .uber-pricing-page .billing-toggle.domestic {
+          width: 360px;
+          height: 48px;
+          padding: 4px;
+          background: #dceafe;
+        }
+
+        .uber-pricing-page .billing-toggle.domestic button {
+          min-height: 40px;
+          gap: 6px;
+          color: #5b6b80;
+          font-size: 16px;
+        }
+
+        .uber-pricing-page .billing-toggle.domestic button.active {
+          color: #23282f;
+          box-shadow: 0 2px 12px rgba(56, 94, 145, 0.12);
+        }
+
+        .uber-pricing-page .annual-benefit {
+          color: #1677e8;
+          font-weight: 700;
+        }
+
+        .uber-pricing-page .domestic-renew-toggle {
+          position: absolute;
+          right: 0;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          min-height: 44px;
+          border: 1px solid #d6e1ef;
+          border-radius: 999px;
+          padding: 5px 11px 5px 8px;
+          background: #f4f8fd;
+          color: #596b82;
+          font-size: 14px;
+          font-weight: 700;
+          white-space: nowrap;
+          cursor: pointer;
+          pointer-events: auto;
+          transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+        }
+
+        .uber-pricing-page .domestic-renew-toggle.active {
+          border-color: #3691ff;
+          background: #e9f3ff;
+          color: #125bc6;
+          box-shadow: 0 4px 16px rgba(29, 119, 230, 0.16);
+        }
+
+        .uber-pricing-page .domestic-renew-toggle:focus-visible,
+        .uber-pricing-page .billing-toggle.domestic button:focus-visible {
+          outline: 2px solid #1677e8;
+          outline-offset: 3px;
+        }
+
+        .uber-pricing-page .domestic-renew-toggle:disabled {
+          cursor: default;
+          opacity: 1;
+        }
+
+        .uber-pricing-page .domestic-renew-track {
+          position: relative;
+          display: inline-block;
+          width: 34px;
+          height: 20px;
+          flex: 0 0 34px;
+          border-radius: 999px;
+          background: #b6c7dc;
+          transition: background 0.16s ease;
+        }
+
+        .uber-pricing-page .domestic-renew-track::after {
+          content: '';
+          position: absolute;
+          top: 3px;
+          left: 3px;
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          background: #fff;
+          box-shadow: 0 1px 3px rgba(20, 58, 104, 0.16);
+          transition: transform 0.16s ease;
+        }
+
+        .uber-pricing-page .domestic-renew-toggle.active .domestic-renew-track {
+          background: #1677e8;
+        }
+
+        .uber-pricing-page .domestic-renew-toggle.active .domestic-renew-track::after {
+          transform: translateX(14px);
+        }
+
+        .uber-pricing-page .domestic-renew-offer {
+          border-radius: 999px;
+          padding: 4px 7px;
+          background: #f05b38;
+          color: #fff;
+          font-size: 11px;
+          line-height: 16px;
+          font-weight: 700;
+        }
+
+        .uber-pricing-page .subscription-ribbon {
+          position: absolute;
+          top: 18px;
+          right: -8px;
+          z-index: 2;
+          min-width: 84px;
+          border-radius: 4px 0 0 4px;
+          padding: 6px 12px;
+          background: #ff5a36;
+          color: #fff;
+          font-size: 12px;
+          line-height: 16px;
+          font-weight: 700;
+          letter-spacing: 0.02em;
+          box-shadow: 0 6px 16px rgba(255, 90, 54, 0.2);
+        }
+
+        .uber-pricing-page .subscription-ribbon::after {
+          content: '';
+          position: absolute;
+          right: 0;
+          bottom: -8px;
+          border-width: 4px;
+          border-style: solid;
+          border-color: #b83318 transparent transparent #b83318;
+        }
+
+        .uber-pricing-page .price-offer {
+          display: flex;
+          min-height: 20px;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 2px;
+          color: var(--body);
+          font-size: 12px;
+          line-height: 18px;
+        }
+
+        .uber-pricing-page .price-original {
+          text-decoration: line-through;
+          text-decoration-thickness: 1px;
+        }
+
+        .uber-pricing-page .plan.featured .price-offer {
+          color: rgba(255, 255, 255, 0.68);
+        }
+
         .uber-pricing-page .billing-discount {
           display: inline-flex;
           align-items: center;
@@ -162,14 +319,24 @@ export function PricingStyles() {
 
         .uber-pricing-page .pricing-grid {
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-columns: repeat(4, minmax(0, 1fr));
           align-items: flex-start;
           gap: 24px;
           padding: 0;
           margin: 0;
         }
 
+        .uber-pricing-page .domestic-pricing-grid {
+          grid-template-columns: repeat(var(--visible-plan-count), minmax(0, 282px));
+          justify-content: center;
+        }
+
+        .uber-pricing-page .domestic-compare-filtered table {
+          min-width: 720px;
+        }
+
         .uber-pricing-page .plan {
+          position: relative;
           display: flex;
           flex-direction: column;
           width: 100%;
@@ -465,6 +632,13 @@ export function PricingStyles() {
 
         .uber-pricing-page .info-row:last-child { border-bottom: 0; }
         .uber-pricing-page .plan.featured .info-row { border-bottom-color: rgba(255, 255, 255, 0.16); }
+        .uber-pricing-page .info-row.domestic-current-plan-date {
+          margin-top: 4px;
+          padding-top: 12px;
+          border-top: 1px solid var(--line);
+          font-size: 12px;
+        }
+        .uber-pricing-page .plan.featured .domestic-current-plan-date { border-top-color: rgba(255, 255, 255, 0.16); }
         .uber-pricing-page .info-row strong {
           text-align: right;
           font-weight: 500;
@@ -1331,6 +1505,10 @@ export function PricingStyles() {
             width: min(100%, 228px);
           }
 
+          .uber-pricing-page .billing-toggle.domestic {
+            width: min(100%, 360px);
+          }
+
           .uber-pricing-page .recharge-card,
           .uber-pricing-page .storage-pricing-section,
           .uber-pricing-page .pricing-grid,
@@ -1358,6 +1536,28 @@ export function PricingStyles() {
             grid-template-columns: 1fr;
           }
 
+        }
+
+        @media (max-width: 900px) {
+          .uber-pricing-page .domestic-pricing-head {
+            min-height: 184px;
+            margin-bottom: 24px;
+          }
+
+          .uber-pricing-page .domestic-pricing-controls {
+            top: 76px;
+            flex-direction: column;
+            gap: 12px;
+          }
+
+          .uber-pricing-page .domestic-renew-toggle {
+            position: static;
+          }
+        }
+
+        @media (max-width: 720px) {
+          .uber-pricing-page .domestic-pricing-controls { top: 72px; }
+          .uber-pricing-page .domestic-pricing-head { min-height: 176px; }
         }
       `}</style>);
 }
