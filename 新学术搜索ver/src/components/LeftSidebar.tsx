@@ -125,7 +125,7 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenUpg
       setActiveNav('research-projects');
     } else if (currentView === 'research-canvas') {
       setActiveNav('research-canvas');
-    } else if (currentView === 'truecite' || currentView === 'tools' || currentView === 'figure-to-pptx' || currentView === 'figure-to-excel') {
+    } else if (currentView === 'truecite' || currentView === 'tools' || currentView === 'figure-to-pptx' || currentView === 'figure-to-excel' || currentView === 'excel-to-figure') {
       setActiveNav('tools');
     } else if (currentView === 'list') {
       setActiveNav('scholar-search');

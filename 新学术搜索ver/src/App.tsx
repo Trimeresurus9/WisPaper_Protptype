@@ -18,6 +18,7 @@ import { AcademicAgent } from "./components/AcademicAgent";
 import { ResearchProjects } from "./components/ResearchProjects";
 import { ResearchCanvas } from "./components/ResearchCanvas";
 import { FigureToPPTX } from "./components/FigureToPPTX";
+import { ExcelToFigure } from "./components/ExcelToFigure";
 import { ToolsPage } from "./components/ToolsPage";
 import { MockConsole } from "./components/MockConsole";
 import { BillingProvider } from './contexts/BillingContext';
@@ -53,6 +54,7 @@ const viewRoutes: Record<string, string> = {
   tools: '/app/tools',
   'figure-to-pptx': '/app/tools/figure-to-pptx',
   'figure-to-excel': '/app/tools/figure-to-excel',
+  'excel-to-figure': '/app/tools/excel-to-figure',
 };
 
 const getViewFromPath = (pathname: string) => {
@@ -93,7 +95,7 @@ export default function App() {
     useState<Paper | null>(null);
   const initialView = typeof window !== 'undefined' ? getViewFromPath(window.location.pathname) : 'home';
   const [viewMode, setViewMode] = useState<
-    "home" | "explore" | "list" | "quick-paper" | "detail" | "reader" | "library" | "scholar-qa" | "all-feeds" | "paper-reproduction" | "idea-discovery" | "fudan-collection-search" | "academic-agent" | "research-projects" | "research-canvas" | "truecite" | "tools" | "figure-to-pptx" | "figure-to-excel"
+    "home" | "explore" | "list" | "quick-paper" | "detail" | "reader" | "library" | "scholar-qa" | "all-feeds" | "paper-reproduction" | "idea-discovery" | "fudan-collection-search" | "academic-agent" | "research-projects" | "research-canvas" | "truecite" | "tools" | "figure-to-pptx" | "figure-to-excel" | "excel-to-figure"
   >(initialView as any);
   const historyNavigationRef = React.useRef(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -338,7 +340,7 @@ export default function App() {
       <BillingProvider>
       <div className={isReaderView ? "h-screen overflow-hidden bg-white flex" : "min-h-screen bg-white flex"}>
         {/* Left Sidebar - Only show in list view, library view, and scholar-qa view */}
-        {(viewMode === "explore" || viewMode === "list" || viewMode === "reader" || viewMode === "library" || viewMode === "scholar-qa" || viewMode === "all-feeds" || viewMode === "paper-reproduction" || viewMode === "idea-discovery" || viewMode === "fudan-collection-search" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "truecite" || viewMode === "tools" || viewMode === "figure-to-pptx" || viewMode === "figure-to-excel") && !(viewMode === "academic-agent" && agentTaskActive) && (
+        {(viewMode === "explore" || viewMode === "list" || viewMode === "reader" || viewMode === "library" || viewMode === "scholar-qa" || viewMode === "all-feeds" || viewMode === "paper-reproduction" || viewMode === "idea-discovery" || viewMode === "fudan-collection-search" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "truecite" || viewMode === "tools" || viewMode === "figure-to-pptx" || viewMode === "figure-to-excel" || viewMode === "excel-to-figure") && !(viewMode === "academic-agent" && agentTaskActive) && (
           <LeftSidebar
             onNavigate={handleWorkspaceNavigate}
             onOpenInvite={() => setShowInviteModal(true)}
@@ -527,6 +529,7 @@ export default function App() {
               onOpenTrueCite={() => setViewMode('truecite')}
               onOpenFigureToPPTX={() => { setFigureToPPTXFromReader(false); setViewMode('figure-to-pptx'); }}
               onOpenFigureToExcel={() => { setFigureToPPTXFromReader(false); setViewMode('figure-to-excel'); }}
+              onOpenExcelToFigure={() => setViewMode('excel-to-figure')}
             />
           ) : viewMode === "figure-to-pptx" ? (
             <FigureToPPTX
@@ -539,6 +542,8 @@ export default function App() {
               output="excel"
               onBackToTools={() => setViewMode('tools')}
             />
+          ) : viewMode === "excel-to-figure" ? (
+            <ExcelToFigure onBackToTools={() => setViewMode('tools')} />
           ) : (
             <PaperDetail
               paper={selectedPaper}
