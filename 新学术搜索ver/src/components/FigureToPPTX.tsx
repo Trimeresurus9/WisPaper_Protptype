@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { FigureExplodeDemo } from './figure-to-pptx/FigureExplodeDemo';
 import { FigureToExcelDemo } from './figure-to-pptx/FigureToExcelDemo';
+import { ToolInputPreview } from './ToolInputPreview';
 
 type WorkflowStep = 'input' | 'select' | 'generating' | 'result';
 type JobStatus = 'success' | 'processing' | 'failed';
@@ -337,21 +338,24 @@ export function FigureToPPTX({ fromReader = false, onBackToReader, onBackToTools
                   </div>
                 </div>
 
-                <div className="relative overflow-hidden rounded-[24px] border border-white bg-[#eef6fd] p-3 shadow-[0_22px_56px_rgba(61,92,126,0.11)]">
-                  <Player
-                    component={isExcel ? FigureToExcelDemo : FigureExplodeDemo}
-                    durationInFrames={180}
-                    compositionWidth={900}
-                    compositionHeight={420}
-                    fps={30}
-                    autoPlay
-                    loop
-                    controls={false}
-                    clickToPlay
-                    acknowledgeRemotionLicense
-                    style={{ width: '100%', aspectRatio: '900 / 420', borderRadius: 14, overflow: 'hidden' }}
-                  />
-                </div>
+                <ToolInputPreview
+                  kind={isExcel ? 'chart' : 'figure'}
+                  demo={(
+                    <Player
+                      component={isExcel ? FigureToExcelDemo : FigureExplodeDemo}
+                      durationInFrames={180}
+                      compositionWidth={900}
+                      compositionHeight={420}
+                      fps={30}
+                      autoPlay
+                      loop
+                      controls={false}
+                      clickToPlay
+                      acknowledgeRemotionLicense
+                      style={{ width: '100%', aspectRatio: '900 / 420', borderRadius: 10, overflow: 'hidden' }}
+                    />
+                  )}
+                />
               </div>
             ) : (
               <>

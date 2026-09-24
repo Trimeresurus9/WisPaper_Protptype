@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { ExcelToFigureDemo } from './excel-to-figure/ExcelToFigureDemo';
+import { ToolInputPreview } from './ToolInputPreview';
 
 type WorkflowStep = 'input' | 'configure' | 'generating' | 'result';
 type Theme = 'journal' | 'fresh' | 'dark';
@@ -210,9 +211,10 @@ export function ExcelToFigure({ onBackToTools }: { onBackToTools: () => void }) 
                 <input ref={dataInputRef} type="file" accept=".csv,.xlsx,.xls,.json,application/json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={(event) => uploadData(event.target.files?.[0])} />
               </div>
 
-              <div className="min-h-[440px] overflow-hidden rounded-[14px] bg-[#f5f8fc] lg:min-h-[520px]">
-                <Player component={ExcelToFigureDemo} durationInFrames={180} compositionWidth={900} compositionHeight={680} fps={30} autoPlay loop controls={false} clickToPlay acknowledgeRemotionLicense style={{ width: '100%', height: '100%', minHeight: 520, overflow: 'hidden' }} />
-              </div>
+              <ToolInputPreview
+                kind="data"
+                demo={<Player component={ExcelToFigureDemo} durationInFrames={180} compositionWidth={900} compositionHeight={680} fps={30} autoPlay loop controls={false} clickToPlay acknowledgeRemotionLicense style={{ width: '100%', height: '100%', minHeight: 420, overflow: 'hidden' }} />}
+              />
             </div>
           ) : (
             <>
