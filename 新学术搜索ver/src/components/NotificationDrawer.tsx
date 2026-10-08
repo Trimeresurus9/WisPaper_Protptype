@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
-import { X, Sparkles, TrendingUp, Bell, Info } from 'lucide-react';
+import { X, Sparkles, TrendingUp, Bell, Info, MessageSquare, ArrowUpRight } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { ticketIsUnread, useFeedbackTickets } from '../contexts/FeedbackTicketsContext';
 
 interface NotificationDrawerProps {
   isOpen: boolean;
@@ -8,7 +9,9 @@ interface NotificationDrawerProps {
 }
 
 export function NotificationDrawer({ isOpen, onClose }: NotificationDrawerProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const { tickets, unreadCount, openTickets, simulateReply } = useFeedbackTickets();
+  const zh = language === 'zh';
 
   // Prevent body scroll when drawer is open
   useEffect(() => {
@@ -33,7 +36,7 @@ export function NotificationDrawer({ isOpen, onClose }: NotificationDrawerProps)
       />
 
       {/* Drawer */}
-      <div className={`fixed top-0 right-0 h-full w-96 bg-white shadow-2xl z-50 transform transition-transform duration-300 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`fixed top-0 right-0 h-full w-full max-w-96 bg-white shadow-2xl z-50 transform transition-transform duration-300 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900">{t('notifications.title')}</h2>
@@ -48,6 +51,26 @@ export function NotificationDrawer({ isOpen, onClose }: NotificationDrawerProps)
         {/* Content */}
         <div className="overflow-y-auto h-[calc(100%-73px)]">
           <div className="p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold text-gray-900">{zh ? '工单回复' : 'Ticket replies'} <span className="ml-1 text-gray-400">{unreadCount}</span></h3>
+              <button onClick={() => { onClose(); openTickets(); }} className="text-xs text-gray-500 hover:text-gray-900">{zh ? '全部工单' : 'All tickets'} →</button>
+            </div>
+            {tickets.filter(ticketIsUnread).map(ticket => (
+              <button key={ticket.id} onClick={() => { onClose(); openTickets(ticket.id); }} className="w-full rounded-xl border border-blue-100 bg-blue-50/40 p-4 text-left transition-colors hover:border-blue-300 hover:bg-blue-50">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-lg bg-white p-2.5 text-gray-700"><MessageSquare className="h-4 w-4" /></div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-blue-500" /><span className="text-xs font-semibold text-gray-900">{zh ? '你的反馈有新回复' : 'Your feedback has a reply'}</span></div>
+                    <p className="mt-2 text-xs text-gray-700">{zh ? ticket.title : ticket.titleEn}</p>
+                    <p className="mt-1 text-[10px] text-gray-400">{ticket.id} · {ticket.messages.at(-1)?.time}</p>
+                    <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-gray-900">{zh ? '查看回复' : 'View reply'}<ArrowUpRight className="h-3 w-3" /></span>
+                  </div>
+                </div>
+              </button>
+            ))}
+            {unreadCount === 0 && <div className="rounded-lg border border-gray-200 p-4 text-xs text-gray-500">{zh ? '暂无未读工单回复。历史记录可在“我的工单”查看。' : 'No unread replies. Find previous messages in My tickets.'}</div>}
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed border-gray-200 px-3 py-2 text-[10px] text-gray-400"><span>Mock · {zh ? '不发送真实工单' : 'Demo only'}</span><button onClick={() => simulateReply()} className="font-medium text-gray-600 hover:text-gray-900">{zh ? '模拟收到新回复' : 'Simulate new reply'}</button></div>
+            <h3 className="border-t border-gray-100 pt-4 text-xs font-semibold text-gray-900">{zh ? '产品与系统公告' : 'Product and system updates'}</h3>
             {/* Feature Update 1 */}
             <div className="bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-lg p-4">
               <div className="flex items-start gap-3">

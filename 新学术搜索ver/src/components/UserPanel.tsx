@@ -4,6 +4,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { FeedbackModal } from './FeedbackModal';
 import { ShinyText } from './ShinyText';
 import { domesticPlans, useBilling } from '../contexts/BillingContext';
+import { useFeedbackTickets } from '../contexts/FeedbackTicketsContext';
 
 interface UserPanelProps {
   onOpenInvite?: () => void;
@@ -15,6 +16,7 @@ interface UserPanelProps {
 }
 
 export function UserPanel({ onOpenInvite, onOpenPaywall, onOpenNotifications, onOpenSettings, isCollapsed = false }: UserPanelProps) {
+  const { unreadCount, openTickets } = useFeedbackTickets();
   const openId = 'tyqx1tdh3nwg';
   const { language, setLanguage, t } = useLanguage();
   const { market, subscription } = useBilling();
@@ -101,7 +103,7 @@ export function UserPanel({ onOpenInvite, onOpenPaywall, onOpenNotifications, on
   };
 
   return (
-    <div className="border-t border-gray-100">
+    <div className="shrink-0 border-t border-gray-100">
       {/* Invite Banner */}
       {showInviteBanner && !isCollapsed && (
         <div className="mx-3 mt-3 p-3 bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-300 rounded-lg relative">
@@ -156,18 +158,16 @@ export function UserPanel({ onOpenInvite, onOpenPaywall, onOpenNotifications, on
             )}
           </button>
           
-          {/* Notification Icon */}
-          {!isCollapsed && (
-            <button
-              onClick={handleNotificationClick}
-              className="relative p-1.5 hover:bg-gray-100 rounded-md transition-colors flex-shrink-0"
-              title={t('notifications.title')}
-            >
-              <HelpCircle className="w-5 h-5 text-gray-600" />
-              {/* Notification Badge */}
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-            </button>
-          )}
+          {/* Ticket unread state is shared with the notification drawer. */}
+          <button
+            onClick={handleNotificationClick}
+            className="relative p-1.5 hover:bg-gray-100 rounded-md transition-colors flex-shrink-0"
+            title={t('notifications.title')}
+            aria-label={language === 'zh' ? `消息与通知，${unreadCount} 个工单有新回复` : `Notifications, ${unreadCount} unread tickets`}
+          >
+            <Bell className="w-5 h-5 text-gray-600" />
+            {unreadCount > 0 && <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full border border-white bg-red-500 px-1 text-[9px] text-white">{unreadCount}</span>}
+          </button>
         </div>
         
         {/* User Menu Dropdown */}
@@ -338,6 +338,15 @@ export function UserPanel({ onOpenInvite, onOpenPaywall, onOpenNotifications, on
               >
                 <MessageSquare className="w-4 h-4" />
                 <span>{t('user.feedback')}</span>
+              </button>
+
+              <button
+                onClick={() => { setShowUserMenu(false); setShowDownloadMenu(false); openTickets(); }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>{language === 'zh' ? '我的工单' : 'My tickets'}</span>
+                {unreadCount > 0 && <span className="ml-auto rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700">{unreadCount} {language === 'zh' ? '新回复' : 'new'}</span>}
               </button>
 
               {/* Language Settings */}

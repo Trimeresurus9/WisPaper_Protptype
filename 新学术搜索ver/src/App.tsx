@@ -28,6 +28,8 @@ import { InviteModal } from "./components/InviteModal";
 import { PaywallModal } from "./components/PaywallModal";
 import { RechargeModal } from "./components/RechargeModal";
 import { NotificationDrawer } from "./components/NotificationDrawer";
+import { FeedbackTicketsDrawer } from "./components/FeedbackTicketsDrawer";
+import { FeedbackTicketsProvider } from "./contexts/FeedbackTicketsContext";
 import { LanguageProvider } from "./contexts/LanguageContext";
 import { mockPapers } from "./data/mockPapers";
 import { mockBooks } from "./data/mockBooks";
@@ -93,11 +95,12 @@ export default function App() {
   const [filters, setFilters] = useState<FilterOptions>(defaultFilters);
   const [selectedPaper, setSelectedPaper] =
     useState<Paper | null>(null);
-  const initialView = typeof window !== 'undefined' ? getViewFromPath(window.location.pathname) : 'home';
+  const initialView = typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('mock') === 'tickets' ? 'all-feeds' : getViewFromPath(window.location.pathname)) : 'home';
   const [viewMode, setViewMode] = useState<
     "home" | "explore" | "list" | "quick-paper" | "detail" | "reader" | "library" | "scholar-qa" | "all-feeds" | "paper-reproduction" | "idea-discovery" | "fudan-collection-search" | "academic-agent" | "research-projects" | "research-canvas" | "truecite" | "tools" | "figure-to-pptx" | "figure-to-excel" | "excel-to-figure"
   >(initialView as any);
   const historyNavigationRef = React.useRef(false);
+  const [showTasksModal, setShowTasksModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const [pricingSource, setPricingSource] = useState<'general' | 'account-upgrade'>('general');
@@ -338,6 +341,7 @@ export default function App() {
   return (
     <LanguageProvider>
       <BillingProvider>
+      <FeedbackTicketsProvider>
       <div className={isReaderView ? "h-screen overflow-hidden bg-white flex" : "min-h-screen bg-white flex"}>
         {/* Left Sidebar - Only show in list view, library view, and scholar-qa view */}
         {(viewMode === "explore" || viewMode === "list" || viewMode === "reader" || viewMode === "library" || viewMode === "scholar-qa" || viewMode === "all-feeds" || viewMode === "paper-reproduction" || viewMode === "idea-discovery" || viewMode === "fudan-collection-search" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "truecite" || viewMode === "tools" || viewMode === "figure-to-pptx" || viewMode === "figure-to-excel" || viewMode === "excel-to-figure") && !(viewMode === "academic-agent" && agentTaskActive) && (
@@ -606,7 +610,9 @@ export default function App() {
             setViewMode('academic-agent');
           }}
         />}
+        <FeedbackTicketsDrawer />
       </div>
+      </FeedbackTicketsProvider>
       </BillingProvider>
     </LanguageProvider>
   );

@@ -251,7 +251,7 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenUpg
       )}
 
       {/* Navigation */}
-      <nav className={`flex-1 ${isCollapsed ? 'px-1' : 'px-2'} py-2 ${isCollapsed ? 'overflow-visible' : 'overflow-y-auto'}`}>
+      <nav className={`min-h-0 flex-1 ${isCollapsed ? 'px-1' : 'px-2'} py-2 ${isCollapsed ? 'overflow-visible' : 'overflow-y-auto'}`}>
         <div className="space-y-1" aria-label="Workspace 一级导航">
           {latestWorkspaceNav.map(({ id, label, icon: Icon }) => (
             <div key={id} className="relative group">
