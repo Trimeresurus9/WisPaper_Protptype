@@ -8,6 +8,7 @@ export interface TicketMessage {
   textEn: string;
   time: string;
   sequence: number;
+  attachmentNames?: string[];
 }
 export interface FeedbackTicket {
   id: string;
@@ -19,12 +20,17 @@ export interface FeedbackTicket {
   createdAt: string;
   readThrough: number;
   messages: TicketMessage[];
+  pageIdentifier?: string;
+  contact?: string;
+  phone?: string;
+  attachmentNames?: string[];
 }
 
 const examples: FeedbackTicket[] = [
   {
     id: 'WP-20261008-0142', title: 'PDF 解析一直停留在处理中', titleEn: 'PDF parsing is stuck in progress',
     category: '故障反馈', categoryEn: 'Bug report', status: 'needs-info', createdAt: '2026-10-08 09:12', readThrough: 1,
+    contact: 'researcher@university.edu', attachmentNames: ['parser-stuck.png'],
     messages: [
       { id: '142-1', role: 'user', text: '我上传了论文 PDF，等待十分钟后仍显示“处理中”。刷新页面后没有变化，应该如何处理？', textEn: 'My paper PDF is still processing after ten minutes. Refreshing did not help. What should I do?', time: '2026-10-08 09:12', sequence: 1 },
       { id: '142-2', role: 'support', text: '你好，我们已经收到你的反馈。为了定位问题，请补充：\n1. 出现问题时的操作步骤；\n2. 文件大小及页数；\n3. 页面显示的报错信息（如有）。\n\n无需发送论文全文或账号密码，你可以直接在下方回复。', textEn: 'Thanks for reporting this. To investigate, please share:\n1. The steps that led to the problem;\n2. The file size and page count;\n3. Any error text shown.\n\nDo not share the paper itself or your password. You can reply below.', time: '2026-10-08 10:46', sequence: 2 },
@@ -55,40 +61,69 @@ interface TicketContextValue {
   unreadCount: number;
   isOpen: boolean;
   selectedId: string | null;
-  openTickets: (id?: string) => void;
+  openFeedback: (id?: string) => void;
   closeTickets: () => void;
   selectTicket: (id: string | null) => void;
   markRead: (id: string, through: number) => void;
-  sendReply: (id: string, text: string) => void;
+  sendReply: (id: string, text: string, attachmentNames?: string[]) => void;
+  createTicket: (input: { title: string; titleEn: string; category: string; categoryEn: string; content: string; contentEn?: string; pageIdentifier?: string; contact?: string; phone?: string; attachmentNames?: string[] }) => string;
   confirmResolved: (id: string) => void;
   simulateReply: (id?: string) => void;
   resetDemo: () => void;
 }
 const TicketContext = createContext<TicketContextValue | null>(null);
+// ?mock=feedback / ?mock=tickets both open the feedback dialog on the thread list.
+const mockEntry = new URLSearchParams(window.location.search).get('mock');
 const demoTime = () => new Date().toLocaleString('sv-SE', { hour12: false }).slice(0, 16);
-const newMessage = (ticket: FeedbackTicket, role: TicketMessage['role'], text: string, textEn = text): TicketMessage => ({
-  id: crypto.randomUUID(), role, text, textEn, time: demoTime(), sequence: (ticket.messages.at(-1)?.sequence ?? 0) + 1,
+const newMessage = (ticket: FeedbackTicket, role: TicketMessage['role'], text: string, textEn = text, attachmentNames?: string[]): TicketMessage => ({
+  id: crypto.randomUUID(), role, text, textEn, time: demoTime(), sequence: (ticket.messages.at(-1)?.sequence ?? 0) + 1, attachmentNames,
 });
 
 // Session-only demo state: no API calls, email, localStorage or real ticket creation.
 export function FeedbackTicketsProvider({ children }: { children: React.ReactNode }) {
   const [tickets, setTickets] = useState<FeedbackTicket[]>(() => structuredClone(examples));
-  const [isOpen, setIsOpen] = useState(() => new URLSearchParams(window.location.search).get('mock') === 'tickets');
-  const [selectedId, setSelectedId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('mock') === 'tickets' ? examples[0].id : null);
-  const openTickets = useCallback((id?: string) => { setSelectedId(id ?? null); setIsOpen(true); }, []);
+  const [isOpen, setIsOpen] = useState(() => mockEntry === 'feedback' || mockEntry === 'tickets');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const openFeedback = useCallback((id?: string) => {
+    setSelectedId(id ?? null);
+    setIsOpen(true);
+  }, []);
   const closeTickets = useCallback(() => setIsOpen(false), []);
   const selectTicket = useCallback((id: string | null) => setSelectedId(id), []);
   const markRead = useCallback((id: string, through: number) => {
     setTickets(current => current.map(ticket => ticket.id === id && through > ticket.readThrough
       ? { ...ticket, readThrough: Math.min(through, ticket.messages.at(-1)?.sequence ?? 0) } : ticket));
   }, []);
-  const sendReply = useCallback((id: string, text: string) => {
+  const sendReply = useCallback((id: string, text: string, attachmentNames?: string[]) => {
     if (!text.trim()) return;
     setTickets(current => current.map(ticket => {
       if (ticket.id !== id || ticket.status === 'closed') return ticket;
       return { ...ticket, status: ticket.status === 'needs-info' || ticket.status === 'resolved' ? 'processing' : ticket.status,
-        messages: [...ticket.messages, newMessage(ticket, 'user', text.trim())] };
+        messages: [...ticket.messages, newMessage(ticket, 'user', text.trim(), text.trim(), attachmentNames?.length ? attachmentNames : undefined)] };
     }));
+  }, []);
+  const createTicket = useCallback((input: { title: string; titleEn: string; category: string; categoryEn: string; content: string; contentEn?: string; pageIdentifier?: string; contact?: string; phone?: string; attachmentNames?: string[] }) => {
+    const now = new Date();
+    const date = now.toLocaleDateString('sv-SE').replaceAll('-', '');
+    const suffix = crypto.randomUUID().slice(0, 4).toUpperCase();
+    const id = `WP-${date}-${suffix}`;
+    const ticket: FeedbackTicket = {
+      id,
+      title: input.title,
+      titleEn: input.titleEn,
+      category: input.category,
+      categoryEn: input.categoryEn,
+      status: 'processing',
+      createdAt: demoTime(),
+      readThrough: 1,
+      messages: [{ id: crypto.randomUUID(), role: 'user', text: input.content, textEn: input.contentEn ?? input.content, time: demoTime(), sequence: 1 }],
+      pageIdentifier: input.pageIdentifier,
+      contact: input.contact,
+      phone: input.phone,
+      attachmentNames: input.attachmentNames,
+    };
+    setTickets(current => [ticket, ...current]);
+    return id;
   }, []);
   const confirmResolved = useCallback((id: string) => {
     setTickets(current => current.map(ticket => ticket.id === id && ticket.status === 'resolved'
@@ -113,8 +148,8 @@ export function FeedbackTicketsProvider({ children }: { children: React.ReactNod
   }, []);
   const resetDemo = useCallback(() => { setTickets(structuredClone(examples)); setSelectedId(null); }, []);
   const unreadCount = tickets.filter(ticketIsUnread).length;
-  const value = useMemo(() => ({ tickets, unreadCount, isOpen, selectedId, openTickets, closeTickets, selectTicket, markRead, sendReply, confirmResolved, simulateReply, resetDemo }),
-    [tickets, unreadCount, isOpen, selectedId, openTickets, closeTickets, selectTicket, markRead, sendReply, confirmResolved, simulateReply, resetDemo]);
+  const value = useMemo(() => ({ tickets, unreadCount, isOpen, selectedId, openFeedback, closeTickets, selectTicket, markRead, sendReply, createTicket, confirmResolved, simulateReply, resetDemo }),
+    [tickets, unreadCount, isOpen, selectedId, openFeedback, closeTickets, selectTicket, markRead, sendReply, createTicket, confirmResolved, simulateReply, resetDemo]);
   return <TicketContext.Provider value={value}>{children}</TicketContext.Provider>;
 }
 

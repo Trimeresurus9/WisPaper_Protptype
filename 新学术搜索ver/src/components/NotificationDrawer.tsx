@@ -10,7 +10,7 @@ interface NotificationDrawerProps {
 
 export function NotificationDrawer({ isOpen, onClose }: NotificationDrawerProps) {
   const { t, language } = useLanguage();
-  const { tickets, unreadCount, openTickets, simulateReply } = useFeedbackTickets();
+  const { tickets, unreadCount, openFeedback, simulateReply } = useFeedbackTickets();
   const zh = language === 'zh';
 
   // Prevent body scroll when drawer is open
@@ -53,10 +53,10 @@ export function NotificationDrawer({ isOpen, onClose }: NotificationDrawerProps)
           <div className="p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-semibold text-gray-900">{zh ? '工单回复' : 'Ticket replies'} <span className="ml-1 text-gray-400">{unreadCount}</span></h3>
-              <button onClick={() => { onClose(); openTickets(); }} className="text-xs text-gray-500 hover:text-gray-900">{zh ? '全部工单' : 'All tickets'} →</button>
+              <button onClick={() => { onClose(); openFeedback(); }} className="text-xs text-gray-500 hover:text-gray-900">{zh ? '全部反馈' : 'All issues'} →</button>
             </div>
             {tickets.filter(ticketIsUnread).map(ticket => (
-              <button key={ticket.id} onClick={() => { onClose(); openTickets(ticket.id); }} className="w-full rounded-xl border border-blue-100 bg-blue-50/40 p-4 text-left transition-colors hover:border-blue-300 hover:bg-blue-50">
+              <button key={ticket.id} onClick={() => { onClose(); openFeedback(ticket.id); }} className="w-full rounded-xl border border-blue-100 bg-blue-50/40 p-4 text-left transition-colors hover:border-blue-300 hover:bg-blue-50">
                 <div className="flex items-start gap-3">
                   <div className="rounded-lg bg-white p-2.5 text-gray-700"><MessageSquare className="h-4 w-4" /></div>
                   <div className="min-w-0 flex-1">

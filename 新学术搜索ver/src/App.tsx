@@ -28,7 +28,7 @@ import { InviteModal } from "./components/InviteModal";
 import { PaywallModal } from "./components/PaywallModal";
 import { RechargeModal } from "./components/RechargeModal";
 import { NotificationDrawer } from "./components/NotificationDrawer";
-import { FeedbackTicketsDrawer } from "./components/FeedbackTicketsDrawer";
+import { FeedbackModal } from "./components/FeedbackModal";
 import { FeedbackTicketsProvider } from "./contexts/FeedbackTicketsContext";
 import { LanguageProvider } from "./contexts/LanguageContext";
 import { mockPapers } from "./data/mockPapers";
@@ -95,7 +95,7 @@ export default function App() {
   const [filters, setFilters] = useState<FilterOptions>(defaultFilters);
   const [selectedPaper, setSelectedPaper] =
     useState<Paper | null>(null);
-  const initialView = typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('mock') === 'tickets' ? 'all-feeds' : getViewFromPath(window.location.pathname)) : 'home';
+  const initialView = typeof window !== 'undefined' ? (['tickets', 'feedback'].includes(new URLSearchParams(window.location.search).get('mock') ?? '') ? 'all-feeds' : getViewFromPath(window.location.pathname)) : 'home';
   const [viewMode, setViewMode] = useState<
     "home" | "explore" | "list" | "quick-paper" | "detail" | "reader" | "library" | "scholar-qa" | "all-feeds" | "paper-reproduction" | "idea-discovery" | "fudan-collection-search" | "academic-agent" | "research-projects" | "research-canvas" | "truecite" | "tools" | "figure-to-pptx" | "figure-to-excel" | "excel-to-figure"
   >(initialView as any);
@@ -610,7 +610,8 @@ export default function App() {
             setViewMode('academic-agent');
           }}
         />}
-        <FeedbackTicketsDrawer />
+        {/* Feedback dialog (BBS-style issue list / form / thread), driven by FeedbackTicketsContext */}
+        <FeedbackModal />
       </div>
       </FeedbackTicketsProvider>
       </BillingProvider>
