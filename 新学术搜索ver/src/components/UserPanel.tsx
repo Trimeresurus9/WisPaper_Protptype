@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Globe, Bell, Settings, Gift, ArrowRight, Users, User, Download, LogOut, ChevronRight, ChevronDown, Copy, Check, Coins, HelpCircle, Crown, UserPlus, MessageSquare, X } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { FeedbackModal } from './FeedbackModal';
 import { ShinyText } from './ShinyText';
 import { domesticPlans, useBilling } from '../contexts/BillingContext';
 import { useFeedbackTickets } from '../contexts/FeedbackTicketsContext';
@@ -16,7 +15,7 @@ interface UserPanelProps {
 }
 
 export function UserPanel({ onOpenInvite, onOpenPaywall, onOpenNotifications, onOpenSettings, isCollapsed = false }: UserPanelProps) {
-  const { unreadCount, openTickets } = useFeedbackTickets();
+  const { unreadCount, openFeedback } = useFeedbackTickets();
   const openId = 'tyqx1tdh3nwg';
   const { language, setLanguage, t } = useLanguage();
   const { market, subscription } = useBilling();
@@ -26,7 +25,6 @@ export function UserPanel({ onOpenInvite, onOpenPaywall, onOpenNotifications, on
   const domesticEnd = subscription.end ? new Date(subscription.end).toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-US') : '';
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showInviteBanner, setShowInviteBanner] = useState(true);
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const [openIdCopied, setOpenIdCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -329,23 +327,14 @@ export function UserPanel({ onOpenInvite, onOpenPaywall, onOpenNotifications, on
               {/* Feedback */}
               <button 
                 onClick={() => {
-                  console.log('Feedback clicked');
                   setShowUserMenu(false);
                   setShowDownloadMenu(false);
-                  setShowFeedbackModal(true);
+                  openFeedback();
                 }}
                 className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 <MessageSquare className="w-4 h-4" />
                 <span>{t('user.feedback')}</span>
-              </button>
-
-              <button
-                onClick={() => { setShowUserMenu(false); setShowDownloadMenu(false); openTickets(); }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                <MessageSquare className="w-4 h-4" />
-                <span>{language === 'zh' ? '我的工单' : 'My tickets'}</span>
                 {unreadCount > 0 && <span className="ml-auto rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700">{unreadCount} {language === 'zh' ? '新回复' : 'new'}</span>}
               </button>
 
@@ -396,12 +385,6 @@ export function UserPanel({ onOpenInvite, onOpenPaywall, onOpenNotifications, on
           </div>
         )}
       </div>
-
-      {/* Feedback Modal */}
-      <FeedbackModal
-        isOpen={showFeedbackModal}
-        onClose={() => setShowFeedbackModal(false)}
-      />
     </div>
   );
 }
