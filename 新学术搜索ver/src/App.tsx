@@ -17,6 +17,7 @@ import { FudanCollectionResults } from "./components/FudanCollectionResults";
 import { AcademicAgent } from "./components/AcademicAgent";
 import { ResearchProjects } from "./components/ResearchProjects";
 import { ResearchCanvas } from "./components/ResearchCanvas";
+import { InstitutionManagement } from "./components/InstitutionManagement";
 import { FigureToPPTX } from "./components/FigureToPPTX";
 import { ExcelToFigure } from "./components/ExcelToFigure";
 import { ToolsPage } from "./components/ToolsPage";
@@ -45,6 +46,7 @@ const viewRoutes: Record<string, string> = {
   library: '/app/library',
   'research-projects': '/app/projects',
   'research-canvas': '/app/research-canvas',
+  'institution-admin': '/app/institution-admin',
   'all-feeds': '/app/explore',
   'paper-reproduction': '/app/paper-reproduction',
   'idea-discovery': '/app/idea-discovery',
@@ -97,8 +99,13 @@ export default function App() {
     useState<Paper | null>(null);
   const initialView = typeof window !== 'undefined' ? (['tickets', 'feedback'].includes(new URLSearchParams(window.location.search).get('mock') ?? '') ? 'all-feeds' : getViewFromPath(window.location.pathname)) : 'home';
   const [viewMode, setViewMode] = useState<
-    "home" | "explore" | "list" | "quick-paper" | "detail" | "reader" | "library" | "scholar-qa" | "all-feeds" | "paper-reproduction" | "idea-discovery" | "fudan-collection-search" | "academic-agent" | "research-projects" | "research-canvas" | "truecite" | "tools" | "figure-to-pptx" | "figure-to-excel" | "excel-to-figure"
+    "home" | "explore" | "list" | "quick-paper" | "detail" | "reader" | "library" | "scholar-qa" | "all-feeds" | "paper-reproduction" | "idea-discovery" | "fudan-collection-search" | "academic-agent" | "research-projects" | "research-canvas" | "truecite" | "tools" | "figure-to-pptx" | "figure-to-excel" | "excel-to-figure" | "institution-admin"
   >(initialView as any);
+  // Prototype role only; actual authorization must be enforced by the server.
+  const [mockRole] = useState<'org_admin' | 'user'>(() =>
+    new URLSearchParams(window.location.search).get('mockRole') === 'user' ? 'user' : 'org_admin'
+  );
+  const isInstitutionAdmin = mockRole === 'org_admin';
   const historyNavigationRef = React.useRef(false);
   const [showTasksModal, setShowTasksModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -124,7 +131,9 @@ export default function App() {
 
   React.useEffect(() => {
     if (window.location.pathname === '/app/search' || window.location.pathname === '/app/ai-feeds' || window.location.pathname === '/app/explore') {
-      window.history.replaceState({ view: 'explore' }, '', '/');
+      const mockRoleParam = new URLSearchParams(window.location.search).get('mockRole');
+      const roleQuery = mockRoleParam ? `?${new URLSearchParams({mockRole: mockRoleParam})}` : '';
+      window.history.replaceState({ view: 'explore' }, '', `/${roleQuery}`);
     }
 
     const handlePopState = () => {
@@ -144,7 +153,9 @@ export default function App() {
 
     const nextPath = viewRoutes[viewMode] ?? '/';
     if (window.location.pathname !== nextPath) {
-      window.history.pushState({ view: viewMode }, '', nextPath);
+      const mockRoleParam = new URLSearchParams(window.location.search).get('mockRole');
+      const roleQuery = mockRoleParam ? `?${new URLSearchParams({mockRole: mockRoleParam})}` : '';
+      window.history.pushState({ view: viewMode }, '', `${nextPath}${roleQuery}`);
     }
   }, [viewMode]);
 
@@ -344,7 +355,7 @@ export default function App() {
       <FeedbackTicketsProvider>
       <div className={isReaderView ? "h-screen overflow-hidden bg-white flex" : "min-h-screen bg-white flex"}>
         {/* Left Sidebar - Only show in list view, library view, and scholar-qa view */}
-        {(viewMode === "explore" || viewMode === "list" || viewMode === "reader" || viewMode === "library" || viewMode === "scholar-qa" || viewMode === "all-feeds" || viewMode === "paper-reproduction" || viewMode === "idea-discovery" || viewMode === "fudan-collection-search" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "truecite" || viewMode === "tools" || viewMode === "figure-to-pptx" || viewMode === "figure-to-excel" || viewMode === "excel-to-figure") && !(viewMode === "academic-agent" && agentTaskActive) && (
+        {(viewMode === "explore" || viewMode === "list" || viewMode === "reader" || viewMode === "library" || viewMode === "scholar-qa" || viewMode === "all-feeds" || viewMode === "paper-reproduction" || viewMode === "idea-discovery" || viewMode === "fudan-collection-search" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "truecite" || viewMode === "tools" || viewMode === "figure-to-pptx" || viewMode === "figure-to-excel" || viewMode === "excel-to-figure" || viewMode === "institution-admin") && !(viewMode === "academic-agent" && agentTaskActive) && (
           <LeftSidebar
             onNavigate={handleWorkspaceNavigate}
             onOpenInvite={() => setShowInviteModal(true)}
@@ -355,6 +366,7 @@ export default function App() {
             onNewScholarQA={handleResetScholarQA}
             onResetSearch={handleResetSearch}
             currentView={viewMode}
+            isInstitutionAdmin={isInstitutionAdmin}
           />
         )}
 
@@ -548,6 +560,16 @@ export default function App() {
             />
           ) : viewMode === "excel-to-figure" ? (
             <ExcelToFigure onBackToTools={() => setViewMode('tools')} />
+          ) : viewMode === "institution-admin" ? (
+            isInstitutionAdmin ? <InstitutionManagement /> : (
+              <main className="flex min-h-screen flex-1 items-center justify-center bg-gray-50 p-8">
+                <div role="alert" className="max-w-md rounded-xl border border-gray-200 bg-white p-8 text-center">
+                  <h1 className="text-xl font-semibold text-gray-950">无权限访问机构管理</h1>
+                  <p className="mt-3 text-sm text-gray-500">此功能仅对机构管理员开放。当前为普通用户 Mock 角色。</p>
+                  <button onClick={() => setViewMode('explore')} className="mt-6 rounded-lg bg-gray-950 px-4 py-2 text-sm text-white">返回首页</button>
+                </div>
+              </main>
+            )
           ) : (
             <PaperDetail
               paper={selectedPaper}

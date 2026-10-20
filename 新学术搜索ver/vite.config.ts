@@ -7,6 +7,7 @@
   export default defineConfig({
     plugins: [react(), tailwindcss()],
     resolve: {
+      dedupe: ['react', 'react-dom'],
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
       alias: {
         'vaul@1.1.2': 'vaul',
@@ -57,7 +58,9 @@
       outDir: 'build',
     },
     server: {
+      host: '127.0.0.1',
       port: 3000,
-      open: true,
+      strictPort: true,
+      open: false,
     },
   });

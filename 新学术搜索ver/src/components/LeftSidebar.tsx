@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Search, MessageSquare, Library, Rss, Clock, Plus, ChevronDown, ArrowRight, FlaskConical, GraduationCap, Lightbulb, PanelLeftClose, PanelLeftOpen, MoreHorizontal, Folder, Trash2, Bot, FolderKanban, Network, Compass, Wrench } from 'lucide-react';
+import { Search, MessageSquare, Library, Rss, Clock, Plus, ChevronDown, ArrowRight, FlaskConical, GraduationCap, Lightbulb, PanelLeftClose, PanelLeftOpen, MoreHorizontal, Folder, Trash2, Bot, FolderKanban, Network, Compass, Wrench, Building2 } from 'lucide-react';
 import { UserPanel } from './UserPanel';
 import { useLanguage } from '../contexts/LanguageContext';
 import { SettingsModal } from './SettingsModal';
@@ -16,6 +16,7 @@ interface LeftSidebarProps {
   onNewScholarQA?: () => void;
   onResetSearch?: () => void;
   currentView?: string;
+  isInstitutionAdmin?: boolean;
 }
 
 interface NavItem {
@@ -83,7 +84,7 @@ const llmsItems: LLMSItem[] = [
   { id: 'satellite', title: 'Satellite Programing' },
 ];
 
-export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenUpgradePricing, onOpenRecharge, onOpenNotifications, onNewScholarQA, onResetSearch, currentView }: LeftSidebarProps = {}) {
+export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenUpgradePricing, onOpenRecharge, onOpenNotifications, onNewScholarQA, onResetSearch, currentView, isInstitutionAdmin = false }: LeftSidebarProps = {}) {
   const [activeNav, setActiveNav] = useState('all-feeds');
   const [showMyLibrary, setShowMyLibrary] = useState(false);
   const [showLLMSSection, setShowLLMSSection] = useState(false);
@@ -125,6 +126,8 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenUpg
       setActiveNav('research-projects');
     } else if (currentView === 'research-canvas') {
       setActiveNav('research-canvas');
+    } else if (currentView === 'institution-admin') {
+      setActiveNav('institution-admin');
     } else if (currentView === 'truecite' || currentView === 'tools' || currentView === 'figure-to-pptx' || currentView === 'figure-to-excel' || currentView === 'excel-to-figure') {
       setActiveNav('tools');
     } else if (currentView === 'list') {
@@ -186,6 +189,8 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenUpg
         onNavigate('research-projects');
       } else if (itemId === 'research-canvas') {
         onNavigate('research-canvas');
+      } else if (itemId === 'institution-admin' && isInstitutionAdmin) {
+        onNavigate('institution-admin');
       } else if (itemId === 'truecite') {
         onNavigate('truecite');
       } else if (itemId === 'tools') {
@@ -274,6 +279,30 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenUpg
               )}
             </div>
           ))}
+          {isInstitutionAdmin && (
+            <div className="relative group pt-1">
+              <div className={`${isCollapsed ? 'mx-1' : 'mx-3'} mb-2 border-t border-gray-200`} />
+              <button
+                type="button"
+                aria-label="机构管理"
+                aria-current={activeNav === 'institution-admin' ? 'page' : undefined}
+                onClick={() => handleNavClick('institution-admin')}
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'} rounded-lg transition-colors text-sm ${
+                  activeNav === 'institution-admin'
+                    ? 'bg-violet-50 text-violet-700 font-medium'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <Building2 className="w-4 h-4 flex-shrink-0" />
+                {!isCollapsed && <><span>机构管理</span><span className="ml-auto rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">管理员</span></>}
+              </button>
+              {isCollapsed && (
+                <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 z-[60] pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="inline-block px-2 py-1 bg-gray-900 text-white text-xs rounded-md whitespace-nowrap shadow-lg">机构管理</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="my-3 border-t border-gray-100" />
