@@ -3,10 +3,85 @@
 @media(max-width:1150px){.aw-header-actions{gap:6px}.aw-metric,.aw-divider{display:none}.aw-function-grid{gap:9px;padding:12px}.aw-function-grid>button{padding:12px 10px;gap:8px;min-height:88px}.aw-function-icon{width:25px;height:25px}.aw-function-grid strong{font-size:14px}.aw-function-grid small{font-size:11px}.aw-workbench-body{padding-right:46px}.aw-tool-rail{right:5px;width:37px}.aw-chat-header h1{font-size:13px}.aw-workspace .br-status{font-size:10px}.aw-input-line{flex-wrap:wrap}.aw-input-line textarea{flex-basis:60%}.aw-workspace .br-composer-note{font-size:9px}}
 @media(max-width:800px){.agent-task-shell{height:100dvh;padding:7px 7px 7px 0}.aw-left-rail{width:45px}.aw-left-rail button{width:32px;height:34px}.aw-workspace .br-columns{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:48px minmax(250px,1fr) 45px minmax(210px,.85fr)}.aw-workspace .aw-chat-header{grid-row:1;grid-column:1}.aw-workspace .br-conversation{grid-row:2;grid-column:1;min-height:0}.aw-workbench-header{grid-column:1;grid-row:3;border-top:1px solid #e4e7ed;border-left:0}.aw-workbench-body{grid-column:1;grid-row:4;min-height:0;border-left:0}.aw-workspace .br-chat-scroll{min-height:0;max-height:none;padding:16px}.aw-workspace .br-browser{height:auto;min-height:0}.aw-workspace .br-composer-wrap{padding:8px 11px}.aw-workspace .br-composer{min-height:85px}.aw-workspace .aw-input-line textarea{height:35px}.aw-workspace .br-composer-note{margin-top:4px!important}.aw-workspace .aw-function-grid{padding:10px}.aw-function-grid>button{min-height:82px}.aw-workspace.aw-panel-closed .br-columns{grid-template-rows:48px minmax(0,1fr)}.aw-tool-rail{overflow-y:auto;max-height:100%;gap:3px}.aw-header-actions .aw-stop{margin:0}.aw-header-actions>button:first-of-type{display:none}}
 
-/* The workbench observes the client tab session; it is not a second browser. */
+/* The workbench observes the shared browser session; control stays in Chat. */
 .aw-has-client-tabs{padding-top:50px;position:relative}.aw-client-tabs{position:absolute;top:5px;left:64px;right:12px;height:39px;display:flex;gap:5px;align-items:stretch;overflow-x:auto}.aw-client-tabs button{border:0;background:#e9f1f9;color:#687589;border-radius:10px 10px 0 0;display:flex;align-items:center;gap:8px;padding:7px 15px;max-width:320px;white-space:nowrap;font-size:12px;cursor:pointer}.aw-client-tabs button[aria-selected=true]{background:white;color:#303d50}.aw-client-tabs small{font-size:10px;color:#428be2}.aw-preview-toolbar{display:flex;align-items:center;gap:10px;padding:10px 0;color:#8994a4;font-size:11px}.aw-preview-toolbar>span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.aw-preview-toolbar button{display:flex;align-items:center;gap:3px;border:0;background:#eef5ff;color:#3988e8;padding:6px 8px;border-radius:6px;font-size:11px;cursor:pointer}.aw-workspace .br-page-scroll[inert]{user-select:none;pointer-events:none}.aw-client-active .aw-workbench-body{position:static}.aw-client-active .br-browser{position:absolute;left:64px;right:12px;top:50px;bottom:12px;z-index:10;border-radius:18px;background:white;padding:16px 24px;height:auto!important;max-height:none!important}.aw-client-active .br-page-scroll{flex:1;max-height:none}.aw-client-active .aw-browser-intro,.aw-client-active .br-demo-bar{display:none}.aw-client-active .br-paper-body{max-width:1000px;margin:auto}.aw-client-active .br-paper-top{padding:22px 40px}.aw-client-active .br-browser-state{min-height:40px}.aw-client-active .aw-preview-toolbar{font-size:13px}.aw-client-active .br-browser-bottom{min-height:32px}
 
 .aw-execution-progress{display:flex;flex-direction:column;gap:5px;border-left:3px solid #60a5fa;background:#f3f8ff;padding:10px 12px;margin:0 0 10px;font-size:12px;color:#4387d4}.aw-execution-progress span{font-size:11px;color:#8391a2}
-.aw-client-active .aw-chat-header,.aw-client-active .aw-workbench-header,.aw-client-active .br-conversation,.aw-client-active .aw-tool-rail{visibility:hidden}
+.aw-client-active .aw-workspace .br-columns{grid-template-columns:minmax(300px,35fr) minmax(420px,65fr)}
+.aw-client-active .br-browser{position:static!important;z-index:auto!important;border-radius:0!important;padding:0 12px 0 14px!important;background:#f8fafc!important}
+.aw-client-active .aw-workbench-body{position:relative}
+.aw-client-active .aw-browser-intro,.aw-client-active .br-demo-bar{display:none}
+
+/* Browser tracking panel: one session, persistent Chat, explicit hand-off. */
+.agent-task-shell>.aw-workspace{height:auto;min-height:0;align-self:stretch}
+@media(max-width:800px){.aw-client-active .aw-workspace .br-columns{grid-template-columns:minmax(0,1fr)}}
+.aw-tracking-browser .br-columns{grid-template-columns:minmax(340px,43fr) minmax(420px,57fr);grid-template-rows:68px minmax(0,1fr)}
+.aw-tracking-browser.aw-panel-closed .br-columns{grid-template-columns:minmax(0,1fr)}
+.aw-tracking-browser .aw-workbench-body{padding-right:48px;background:#f8fafc}
+.aw-tracking-browser .br-browser{padding:0 12px 0 14px;background:#f8fafc}
+.aw-browser-control-header{padding:0 14px!important;background:#fff;gap:12px}
+.aw-tracking-heading{min-width:0;flex:1;display:flex;flex-direction:column;gap:5px}
+.aw-tracking-heading strong{font-size:14px!important;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aw-tracking-heading>span{display:flex;align-items:center;gap:6px;font-size:11px;color:#778292;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aw-tracking-heading i,.aw-browser-follow-toolbar i,.aw-browser-session-tabs i{width:6px;height:6px;background:#a1aab5;border-radius:50%;flex-shrink:0}
+.aw-tracking-heading i.is-live,.aw-browser-follow-toolbar i.is-live,.aw-browser-session-tabs i.is-live{background:#318ced;box-shadow:0 0 0 3px #e4f0ff}
+.aw-browser-header-actions{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.aw-browser-header-actions button{border:0;background:transparent;display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;border-radius:7px;padding:7px 3px}
+.aw-browser-header-actions .aw-browser-stop{color:#de5064}
+.aw-browser-header-actions .aw-browser-control{background:#0965cf;color:#fff;padding:9px 12px}
+.aw-browser-header-actions .aw-browser-control:hover{background:#0758b6}
+.aw-browser-header-actions .aw-browser-control:disabled{background:#b1c4da;cursor:not-allowed}
+.aw-browser-header-actions .aw-browser-close{color:#7b8796;padding:6px}
+.aw-browser-header-actions .aw-browser-close:hover{background:#f0f3f7}
+.aw-tracking-browser .aw-browser-intro,.aw-tracking-browser .br-demo-bar{display:none}
+.aw-tracking-browser .aw-browser-connect{margin:12px 0 0}
+.aw-browser-follow-toolbar{display:flex;align-items:center;gap:9px;min-height:40px;flex-shrink:0;color:#667588;font-size:11px}
+.aw-browser-follow-toolbar>span{flex:1;display:flex;align-items:center;gap:7px;min-width:0}
+.aw-browser-follow-toolbar button{display:flex;gap:4px;align-items:center;background:#edf4fd;border:0;border-radius:5px;padding:5px 7px;color:#367ec8;font-size:11px;cursor:pointer}
+.aw-browser-session-tabs{display:flex;align-items:center;gap:4px;flex-shrink:0;overflow-x:auto;background:#e9edf2;padding:6px 6px 0;border:1px solid #dfe4eb;border-bottom:0;border-radius:10px 10px 0 0;min-height:37px;scrollbar-width:thin}
+.aw-browser-session-tabs button{border:0;border-radius:7px 7px 0 0;background:transparent;padding:9px 10px;color:#768293;display:flex;align-items:center;gap:6px;max-width:215px;min-width:0;font-size:11px;cursor:pointer;flex-shrink:0}
+.aw-browser-session-tabs button>span{max-width:153px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aw-browser-session-tabs button[aria-selected=true]{background:#fff;color:#3d495a}
+.aw-browser-session-tabs button:last-child{padding:8px 6px}
+.aw-browser-address{gap:7px;padding:0 9px;height:41px;color:#606f80}
+.aw-browser-address>button{border:0;background:none;color:#677588;padding:3px;cursor:pointer}
+.aw-browser-address>button:disabled{color:#bcc4cd;cursor:default}
+.aw-browser-address>span{display:flex;align-items:center;gap:6px;font-size:11px;color:#5a687b;min-width:0;background:#f2f4f7}
+.aw-tracking-browser .br-browser-state{font-size:11px;border-left:1px solid #dfe4eb;border-right:1px solid #dfe4eb;padding:8px 11px}
+.aw-tracking-browser .br-browser-state button{display:flex;align-items:center;gap:4px;font-size:11px;padding:4px 7px;cursor:pointer}
+.aw-tracking-browser .br-page-scroll{border-radius:0 0 9px 9px;min-height:0;border-color:#dfe4eb}
+.aw-tracking-browser .br-browser-bottom{font-size:10px;min-height:35px;color:#7a8697}
+.aw-tracking-browser .aw-tool-rail{right:5px;width:37px;top:12px}
+.aw-browser-task-card{max-width:390px;border:1px solid #e5e8ee;background:#f5f6f8;border-radius:17px;padding:13px;margin:0 0 18px}
+.aw-browser-task-title{display:flex;align-items:center;gap:9px;margin-bottom:11px;color:#477dc0}
+.aw-browser-task-title>span:first-child{width:34px;height:34px;border-radius:10px;background:#e6f2ff;display:flex;align-items:center;justify-content:center}
+.aw-browser-task-title>div{flex:1;min-width:0}
+.aw-browser-task-title strong{display:block;font-size:12px;color:#313d4c;font-weight:600}
+.aw-browser-task-title p{font-size:12px;color:#667384;margin:3px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aw-browser-task-title .aw-card-status{font-size:10px;color:#738194}
+.aw-live-thumbnail{display:block!important;width:100%;text-align:left;border:1px solid #e0e5ec;border-radius:8px;overflow:hidden;background:#fff;padding:0;cursor:pointer;transition:border-color .15s}
+.aw-live-thumbnail:hover{border-color:#9bbfee}
+.aw-thumbnail-address{height:23px;display:flex;align-items:center;gap:4px;background:#f0f3f6;padding:0 9px}
+.aw-thumbnail-address i{width:5px;height:5px;border-radius:50%;background:#c4ccd7}
+.aw-thumbnail-address span{margin-left:7px;font-size:9px;color:#8691a1}
+.aw-thumbnail-page{padding:0 0 18px;min-height:150px;background:#fff;color:#46576c}
+.aw-thumbnail-brand{background:#f1e5e7;border-bottom:1px solid #ecdbde;font-family:Georgia,serif;color:#9b363d;padding:8px 14px;font-size:18px}
+.aw-thumbnail-page.is-code .aw-thumbnail-brand{background:#f2f4f7;color:#333e4d;font-family:inherit;font-size:14px}
+.aw-thumbnail-page>strong{display:block;padding:13px 14px 4px;font-family:Georgia,serif;font-size:16px;color:#374050}
+.aw-thumbnail-page>span{display:block;padding:0 14px;font-size:9px;color:#8994a4}
+.aw-thumbnail-lines{padding:12px 14px 0;display:flex;flex-direction:column;gap:5px}
+.aw-thumbnail-lines i{background:#edf0f4;height:3px;border-radius:2px;width:95%}
+.aw-thumbnail-lines i:nth-child(2){width:83%}.aw-thumbnail-lines i:nth-child(3){width:66%}
+.aw-open-browser{width:100%;margin-top:9px;display:flex;align-items:center;justify-content:center;gap:6px;border:1px solid #e3e8ef;border-radius:20px;padding:8px;color:#475b74;background:#fff;font-size:12px;cursor:pointer}
+.aw-open-browser:hover{background:#edf5ff;color:#287ccc}
+.aw-tracking-browser .aw-chat-header h1{font-size:14px}
+.aw-tracking-browser .aw-metric,.aw-tracking-browser .aw-divider{display:none}
+.aw-tracking-browser .br-execution{border-radius:11px}
+.aw-tracking-browser .br-execution-head{padding:9px 12px}
+.aw-tracking-browser .br-execution ol{padding:7px 13px}
+.aw-tracking-browser .br-execution li{padding:7px 0}
+.aw-tracking-browser button:focus-visible{outline:2px solid #318ced;outline-offset:2px}
+@media(max-width:1100px) and (min-width:801px){.aw-tracking-browser .br-columns{grid-template-columns:minmax(300px,42fr) minmax(390px,58fr)}.aw-browser-header-actions{gap:6px}.aw-browser-header-actions .aw-browser-control{padding:8px}.aw-tracking-browser .br-chat-scroll{padding:20px 16px}}
+@media(max-width:800px){.aw-tracking-browser .br-columns{grid-template-columns:minmax(0,1fr);grid-template-rows:45px minmax(0,1fr) 63px minmax(0,1.2fr)}.aw-tracking-browser.aw-panel-closed .br-columns{grid-template-columns:minmax(0,1fr);grid-template-rows:45px minmax(0,1fr)}.aw-tracking-browser .aw-browser-control-header{padding:0 10px!important;gap:6px}.aw-tracking-heading strong{font-size:12px!important}.aw-browser-header-actions{gap:6px}.aw-browser-header-actions button{font-size:11px}.aw-browser-header-actions .aw-browser-control{padding:8px 7px}.aw-tracking-browser .aw-workbench-body{padding-right:0}.aw-tracking-browser .br-browser{padding:0 9px}.aw-tracking-browser .aw-tool-rail{display:none}.aw-browser-task-card{max-width:100%}.aw-tracking-browser .br-chat-scroll{padding:12px}.aw-browser-follow-toolbar{font-size:10px;min-height:33px}.aw-browser-follow-toolbar button{font-size:10px}.aw-browser-address{gap:3px}.aw-browser-address>span{font-size:10px}.aw-browser-session-tabs button{max-width:150px}.aw-tracking-browser .br-composer-wrap{padding:6px 10px}.aw-tracking-browser .br-composer-note{display:none}.aw-tracking-browser .br-composer{min-height:75px}.aw-tracking-browser .aw-input-line{min-height:32px}}
 
 .aw-project-context{display:flex;align-items:center;gap:7px;width:max-content;max-width:100%;margin-bottom:14px;border:1px solid #dcecff;background:#f4f9ff;color:#5d789d;border-radius:999px;padding:6px 10px;font-size:11px}.aw-project-context strong{color:#357dcc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.aw-credit-notice{margin:0 0 18px;border:1px solid #f0d9a9;background:#fffaf0;border-radius:13px;padding:14px 15px;color:#6b5734}.aw-credit-notice.is-empty{border-color:#dce6f3;background:#f7faff;color:#46596f}.aw-credit-notice strong{display:block;font-size:13px;color:#293746}.aw-credit-notice p{margin:5px 0 11px;font-size:12px;line-height:1.65;color:#78879a}.aw-credit-notice>div{display:flex;gap:8px}.aw-credit-notice button{border:0;border-radius:8px;background:#2f86ee;color:#fff;padding:7px 11px;font-size:11px;font-weight:600}.aw-credit-notice button.secondary{border:1px solid #dce4ed;background:#fff;color:#5e6c7d}
