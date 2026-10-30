@@ -4,6 +4,7 @@ import { TaskMemoryPanel, useTaskMemory } from "../agent-memory/TaskMemoryPanel"
 import React, { useEffect, useRef, useState } from "react";
 import { Sparkles, GraduationCap, Moon, MoreHorizontal, PanelRight, Share2, Lightbulb, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BookOpen, Bot, Check, CheckCircle2, ChevronDown, ChevronRight, Circle, ExternalLink, FileText, FolderOpen, Globe2, Hand, Link2, LoaderCircle, LockKeyhole, MousePointer2, Pause, Play, Plus, RotateCcw, Search, ShieldCheck, Square, X } from "lucide-react";
 import "./browser-research.css";
+import { AgentResponse, type ResponseStatus } from "./AgentResponse";
 import "./agent-workspace.css";
 import { AgentTaskNavigation, CommonFunctions, AuxiliaryWorkbench, workbenchTools, WorkbenchView } from "./AgentWorkbench";
 
@@ -18,6 +19,8 @@ const stepTitles = ["读取论文页面与版本信息", "定位全文与相关�
 const phaseLabels: Record<Phase, string> = {ready:"等待开始", running:"正在操作网页", paused:"已暂停", takeover:"由你操作", login:"等待登录", error:"页面加载失败", done:"本轮已完成", stopped:"已停止"};
 const defaultPrompt = "读取这篇论文，整理论文信息、PDF 和官方代码，保存前让我确认。";
 const storageKey = "wispaper-browser-research-demo-materials";
+
+type ChatMessage = {role: "user" | "agent"; text: string; status?: ResponseStatus};
 
 type CreditState = "ok" | "low" | "empty";
 
@@ -39,7 +42,10 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
   const [composerMenu, setComposerMenu] = useState(false);
   const [activeSkill, setActiveSkill] = useState(initialSkill);
   const [lowCreditDismissed, setLowCreditDismissed] = useState(false);
-  const [chatMessages, setChatMessages] = useState<{role:"user"|"agent";text:string}[]>(initialTask ? creditState === "empty" ? [{role:"user", text:initialTask}] : [{role:"user", text:initialTask},{role:"agent",text:"我会先梳理研究目标与已有材料。你可以在右侧选择研究工具，或通过输入框添加网页作为上下文。"}] : []);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialTask ? creditState === "empty" ? [{role:"user", text:initialTask}] : [{role:"user", text:initialTask},{role:"agent",text:initialTask,status:"running"}] : []);
+  const responseRunning = chatMessages.some(message => message.status === "running");
+  const responsePending = chatMessages.some(message => message.status === "running" || message.status === "stopped");
+  const updateResponseStatus = (index: number, status: ResponseStatus) => setChatMessages(items => items.map((message, i) => i === index ? {...message, status} : message));
   const title = initialTask || '从“NLP与多模态学习探索”生成可执行的研究计划';
   const selectSkill = (skill: string) => {setActiveSkill(skill);setPrompt(`请帮我进行${skill}，结合当前研究目标与已有材料。`);};
   const selectBrowserUse = () => { if (busy) return; setActiveSkill("网页执行"); setAttached(false); setComposerMenu(false); openBrowser(); };
@@ -69,7 +75,8 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
   const [activity, setActivity] = useState<string[]>([]);
   const pickerRef = useRef<HTMLDivElement>(null);
   const saveRef = useRef<HTMLDivElement>(null);
-  const busy = ["running", "paused", "takeover", "login", "error"].includes(phase);
+  const browserBusy = ["running", "paused", "takeover", "login", "error"].includes(phase);
+  const busy = browserBusy || responsePending;
   const displayedPage = followPage ? activePage : inspectedPage;
   const page = pages.find(p => p.id === displayedPage)!;
   const taskPage = pages.find(p => p.id === activePage)!;
@@ -186,7 +193,7 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
       setPrompt(""); return;
     }
     if (activeSkill === "网页执行" || attached) {setTabsCreated(true); setAttached(true); openBrowser(); start(); return;}
-    setChatMessages(items=>[...items,{role:"user",text:prompt.trim()},{role:"agent",text:`已进入${activeSkill || "研究"}流程。请补充研究问题、材料范围与预期产出；我会在当前任务中逐步整理。`}]);
+    setChatMessages(items=>[...items,{role:"user",text:prompt.trim()},{role:"agent",text:prompt.trim(),status:"running"}]);
     setPrompt("");
   };
   return <div className={`agent-task-shell ${tabsCreated ? "aw-has-client-tabs" : ""} ${clientTab ? "aw-client-active" : ""}`}>
@@ -194,23 +201,23 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
     <AgentTaskNavigation onBack={onBack} onNavigate={onNavigate}/><div className={`br-workspace aw-workspace ${workbench === "browser" ? "aw-tracking-browser" : ""} ${panelOpen ? "" : "aw-panel-closed"}`}>
 
     <div className="br-columns">
-      <header className="aw-chat-header"><h1 title={title}>{title}</h1><div className="aw-header-actions"><span className={`br-status br-status-${phase}`} role="status"><i/>{creditState === "empty" ? "等待补充积分" : submitted ? phaseLabels[phase] : "进行中"}</span><span className="aw-metric"><GraduationCap size={17}/>1250</span><span className="aw-metric"><Moon size={16}/>1h</span><i className="aw-divider"/><button aria-label="复制任务链接" onClick={()=>{navigator.clipboard?.writeText(window.location.href).then(()=>setNotice("原型页面链接已复制"),()=>setNotice("请复制地址栏中的原型链接"));}}><Share2 size={18}/></button><button className="aw-stop" aria-label="停止当前任务" onClick={()=>{if(busy)setPhase("stopped");else setNotice("当前没有正在执行的步骤");}}><Square size={14}/></button><button aria-label="新建研究任务" onClick={onBack}><MoreHorizontal size={19}/></button>{!panelOpen && <button aria-label="展开工作台" onClick={()=>setPanelOpen(true)}><PanelRight size={18}/></button>}</div></header>
+      <header className="aw-chat-header"><h1 title={title}>{title}</h1><div className="aw-header-actions"><span className={`br-status br-status-${phase}`} role="status"><i/>{creditState === "empty" ? "等待补充积分" : responseRunning ? "正在生成" : responsePending ? "已暂停" : submitted ? phaseLabels[phase] : chatMessages.length ? "已完成" : "等待开始"}</span><span className="aw-metric"><GraduationCap size={17}/>1250</span><span className="aw-metric"><Moon size={16}/>1h</span><i className="aw-divider"/><button aria-label="复制任务链接" onClick={()=>{navigator.clipboard?.writeText(window.location.href).then(()=>setNotice("原型页面链接已复制"),()=>setNotice("请复制地址栏中的原型链接"));}}><Share2 size={18}/></button><button className="aw-stop" aria-label="停止当前任务" onClick={()=>{if(responseRunning)setChatMessages(items=>items.map(message=>message.status === "running" ? {...message,status:"stopped"} : message));else if(browserBusy)stop();else setNotice("当前没有正在执行的步骤");}}><Square size={14}/></button><button aria-label="新建研究任务" onClick={onBack}><MoreHorizontal size={19}/></button>{!panelOpen && <button aria-label="展开工作台" onClick={()=>setPanelOpen(true)}><PanelRight size={18}/></button>}</div></header>
       {panelOpen && <header className={`aw-workbench-header ${workbench === "browser" ? "aw-browser-control-header" : ""}`}>
         {workbench === "browser" ? <>
           <div className="aw-tracking-heading"><strong>{currentAction}</strong><span role="status"><i className={phase === "running" ? "is-live" : ""}/>{phaseLabels[phase]} · {taskPage.domain}</span></div>
           <div className="aw-browser-header-actions">
-            {busy && <button className="aw-browser-stop" onClick={stop}><Square size={12}/>停止</button>}
+            {browserBusy && <button className="aw-browser-stop" onClick={stop}><Square size={12}/>停止</button>}
             {phase === "takeover" ? <button className="aw-browser-control" onClick={resume}><Play size={14}/>交还 Agent</button> : <button className="aw-browser-control" disabled={!attached && !submitted} onClick={takeOver}><MousePointer2 size={14}/>控制浏览器</button>}
             <button className="aw-browser-close" aria-label="关闭浏览器面板" onClick={()=>setPanelOpen(false)}><X size={19}/></button>
           </div>
         </> : <><strong>{workbench === 'memory' ? t('agentPreferences.title') : workbenchTools.find(t=>t.id===workbench)?.label}</strong><button aria-label="收起工作台" onClick={()=>setPanelOpen(false)}><PanelRight size={19}/></button></>}
       </header>}
-      <section className="br-conversation" aria-label="网页研究对话">
+      <section className="br-conversation" aria-label="Agent 研究对话">
         <div className="br-chat-scroll">
           {projectContext && <div className="aw-project-context"><FolderOpen size={15}/><span>当前项目</span><strong>{projectContext.title}</strong></div>}
           {creditState === "empty" && <div className="aw-credit-notice is-empty" role="status"><strong>任务已保留，补充积分后即可启动</strong><p>当前余额为 0 Credits。你的任务内容和项目上下文不会丢失。</p><div><button onClick={onRecharge}>补充积分</button><button className="secondary" onClick={onUpgrade}>查看会员方案</button></div></div>}
           {creditState === "low" && !lowCreditDismissed && <div className="aw-credit-notice" role="status"><strong>当前余额较低</strong><p>剩余 {userCredits.toLocaleString()} Credits，本次任务仍可继续。建议提前补充积分，避免后续步骤中断。</p><div><button onClick={onRecharge}>补充积分</button><button className="secondary" onClick={()=>setLowCreditDismissed(true)}>知道了</button></div></div>}
-          {chatMessages.map((message,index)=><div key={index} className={message.role === "user" ? "br-user-message" : "aw-chat-answer"}>{message.role === "agent" && <div className="br-assistant-label"><span className="br-agent-icon"><Bot size={16}/></span><strong>WisPaper</strong></div>}<p>{message.text}</p></div>)}
+          {chatMessages.map((message,index)=><div key={index} className={message.role === "user" ? "br-user-message" : "aw-chat-answer"}>{message.role === "agent" && <div className="br-assistant-label"><span className="br-agent-icon"><Bot size={16}/></span><strong>WisPaper</strong></div>}{message.role === "agent" && message.status ? <AgentResponse task={message.text} status={message.status} onStatusChange={status=>updateResponseStatus(index,status)} canReplay={index === chatMessages.length - 1 && !submitted}/> : <p>{message.text}</p>}</div>)}
           {submitted && <>
             <div className="br-user-message">{submitted}<div><Globe2 size={12}/>{selected.length} 个网页 · {permission === "read" ? "仅阅读" : "阅读与操作"}</div></div>
             <div className="br-assistant-label"><span className="br-agent-icon"><Bot size={16}/></span><strong>WisPaper</strong><span>网页研究</span></div>
@@ -228,7 +235,7 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
               <button className="aw-open-browser" onClick={openBrowser}><Globe2 size={14}/>打开浏览器<ArrowUpRight size={14}/></button>
             </div>
             <div className="br-execution"><div className="br-execution-head"><span><Globe2 size={16}/> {permission === "read" ? "阅读网页" : "浏览器任务"}</span><span>{completedSteps} / 3</span></div><ol>{stepTitles.map((title, i) => <li key={title} className={i === step && phase === "running" ? "active" : ""}>{i < completedSteps ? <CheckCircle2 size={17}/> : i === step && phase === "running" ? <LoaderCircle className="br-spin" size={17}/> : <Circle size={17}/>}<div><strong>{permission === "read" && i === 1 ? "提取正文与核心贡献" : title}</strong><small>{i < completedSteps ? ["arxiv.org · v7 · 2023-08-02", selected.includes("code") ? "PDF 与代码来源已定位" : "已定位所选页面中的全文链接", "已整理可追溯的来源"][i] : i === step ? phaseLabels[phase] : "等待执行"}</small></div></li>)}</ol>{activity.length > 0 && <div className="br-activity">{activity.slice(-2).map((item, i) => <span key={i}>{item}</span>)}</div>}</div>
-            {busy && <div className="br-controls">{phase === "running" ? <button onClick={() => setPhase("paused")}><Pause size={14}/>暂停</button> : phase === "paused" || phase === "takeover" ? <button onClick={resume}><Play size={14}/>继续执行</button> : null}{["running", "paused"].includes(phase) && <button onClick={takeOver}><Hand size={14}/>我来接管</button>}<button onClick={() => setPhase("stopped")}><Square size={13}/>停止任务</button></div>}
+            {browserBusy && <div className="br-controls">{phase === "running" ? <button onClick={() => setPhase("paused")}><Pause size={14}/>暂停</button> : phase === "paused" || phase === "takeover" ? <button onClick={resume}><Play size={14}/>继续执行</button> : null}{["running", "paused"].includes(phase) && <button onClick={takeOver}><Hand size={14}/>我来接管</button>}<button onClick={() => setPhase("stopped")}><Square size={13}/>停止任务</button></div>}
             {phase === "paused" && <div className="br-callout">任务已暂停，浏览器不会继续操作。可以继续执行或接管页面。</div>}
             {phase === "takeover" && <div className="br-callout">Agent 已暂停，你可以直接在右侧操作当前页面。点击“交还 Agent”后，任务会基于当前页面继续。</div>}
             {phase === "login" && <div className="br-callout amber"><LockKeyhole size={18}/><strong>需要你完成机构登录</strong><p>Agent 已暂停。请控制右侧演示页面完成登录，再继续研究。</p><button onClick={takeOver}>控制浏览器并登录</button><small>演示环境不收集账号或密码。</small></div>}
