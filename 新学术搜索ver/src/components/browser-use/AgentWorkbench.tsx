@@ -1,9 +1,11 @@
 import React from "react";
+import { Brain } from "lucide-react";
 import { BookOpen, Clock3, Code2, Cpu, FileText, FolderOpen, FolderPlus, Globe2, Image, LayoutGrid, Library, Lightbulb, MessageSquare, MoreHorizontal, Network, PanelRight, Scan, Search, Sparkles, Text, UserRound, WandSparkles } from "lucide-react";
 import wisPaperLogo from '../../assets/3ce02a66a6df7d8cd1f86de17846e94de4e9df61.png';
 
-export type WorkbenchView = "common" | "files" | "browser" | "search" | "plan" | "code" | "review" | "capture" | "gpu";
+export type WorkbenchView = "memory" | "common" | "files" | "browser" | "search" | "plan" | "code" | "review" | "capture" | "gpu";
 export const workbenchTools = [
+  {id:"memory", label:"Agent偏好", icon:Brain},
   {id:"common", label:"常用功能", icon:LayoutGrid}, {id:"files", label:"文件浏览", icon:FolderOpen},
   {id:"browser", label:"网页执行", icon:Globe2}, {id:"search", label:"文献搜索", icon:Search},
   {id:"plan", label:"研究计划", icon:FileText}, {id:"code", label:"代码工作台", icon:Code2},

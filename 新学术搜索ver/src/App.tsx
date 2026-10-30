@@ -152,7 +152,8 @@ export default function App() {
     }
 
     const nextPath = viewRoutes[viewMode] ?? '/';
-    if (window.location.pathname !== nextPath) {
+    const isProjectDetail = viewMode === 'research-projects' && /^\/app\/projects\/\d+$/.test(window.location.pathname);
+    if (window.location.pathname !== nextPath && !isProjectDetail) {
       const mockRoleParam = new URLSearchParams(window.location.search).get('mockRole');
       const roleQuery = mockRoleParam ? `?${new URLSearchParams({mockRole: mockRoleParam})}` : '';
       window.history.pushState({ view: viewMode }, '', `${nextPath}${roleQuery}`);

@@ -23,6 +23,9 @@ import {
   MoreVertical,
   WalletCards,
 } from 'lucide-react';
+import { AgentMemorySettings } from './agent-memory/AgentMemorySettings';
+import { useLanguage } from '../contexts/LanguageContext';
+import { Brain } from 'lucide-react';
 import { isValidEmail } from '../utils/email';
 import { StorageManagementSection } from './StorageManagementSection';
 import { domesticPlans, useBilling } from '../contexts/BillingContext';
@@ -34,7 +37,7 @@ interface SettingsModalProps {
   onOpenPricing?: (source?: 'upgrade' | 'general') => void;
 }
 
-type TabType = 'basic' | 'membership' | 'storage' | 'payment' | 'account';
+type TabType = 'basic' | 'membership' | 'storage' | 'payment' | 'account' | 'agent';
 
 const creditPackages = [
   { id: 'pack-0618', purchasedAt: '2026 年 6 月 18 日', expiresAt: '2026 年 8 月 18 日', total: 5000, used: 1200 },
@@ -141,6 +144,7 @@ function VoucherFeatureTag({ feature }: { feature: VoucherFeatureId }) {
 }
 
 export function SettingsModal({ isOpen, onClose, onOpenPricing }: SettingsModalProps) {
+  const { t } = useLanguage();
   const { market, subscription } = useBilling();
   const domesticActive = Boolean(subscription.end && new Date(subscription.end).getTime() > Date.now());
   const [activeTab, setActiveTab] = useState<TabType>('membership');
@@ -151,6 +155,7 @@ export function SettingsModal({ isOpen, onClose, onOpenPricing }: SettingsModalP
     { id: 'basic' as const, label: '个人资料', icon: User },
     { id: 'storage' as const, label: '存储空间', icon: HardDrive },
     { id: 'payment' as const, label: '订单与账单', icon: CreditCard },
+    { id: 'agent' as const, label: t('agentPreferences.title'), icon: Brain },
     { id: 'account' as const, label: '设置', icon: Settings },
   ];
   const activePage = navigationItems.find((item) => item.id === activeTab) ?? navigationItems[0];
@@ -253,6 +258,7 @@ export function SettingsModal({ isOpen, onClose, onOpenPricing }: SettingsModalP
 
           {/* Content */}
           <main className="min-h-0 flex-1 overflow-y-auto bg-white">
+            {activeTab === 'agent' && <AgentMemorySettings />}
             {activeTab === 'basic' && <BasicInformation />}
             {activeTab === 'membership' && <RegionalMembership onOpenPricing={onOpenPricing} />}
             {activeTab === 'storage' && (market === 'domestic' ? <DomesticAccountBilling storageOnly onOpenPricing={onOpenPricing} /> : <div className="p-8"><div className="mx-auto max-w-3xl"><StorageManagementSection onOpenPricing={onOpenPricing} /></div></div>)}
