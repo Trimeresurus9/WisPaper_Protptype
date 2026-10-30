@@ -16,6 +16,7 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
+import { AgentSettingsLauncher } from "./agent-memory/AgentMemorySettings";
 import { StorageUsagePanel } from "./StorageUsagePanel";
 import { ResearchTree } from "./ResearchTree";
 
@@ -97,6 +98,12 @@ export function ResearchProjects({ onOpenAgent }: { onOpenAgent: () => void }) {
   const [canvasCreationMode, setCanvasCreationMode] = useState<"blank" | "template">("blank");
   const [selectedTemplate, setSelectedTemplate] = useState("ai-algorithm");
 
+  const openAgent = () => {
+    const query = selected ? `?${new URLSearchParams({projectId: String(selected.id), projectTitle: selected.title})}` : '';
+    window.history.pushState({}, '', `/app/agent${query}`);
+    onOpenAgent();
+  };
+
   const createProject = () => {
     if (!newTitle.trim()) return;
     const project: Project = {
@@ -140,11 +147,12 @@ export function ResearchProjects({ onOpenAgent }: { onOpenAgent: () => void }) {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <AgentSettingsLauncher projectId={String(selected.id)} projectName={selected.title}/>
               <button className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium hover:bg-slate-50">
                 <Users className="mr-2 inline h-4 w-4" />协作
               </button>
               <button
-                onClick={onOpenAgent}
+                onClick={openAgent}
                 className="rounded-xl bg-slate-950 px-3.5 py-2 text-sm font-medium text-white hover:bg-slate-800"
               >
                 <Sparkles className="mr-2 inline h-4 w-4" />运行 Agent
@@ -260,7 +268,7 @@ export function ResearchProjects({ onOpenAgent }: { onOpenAgent: () => void }) {
                       </div>
                       <h3 className="mt-7 font-semibold">{title}</h3>
                       <p className="mt-2 text-sm text-slate-500">{description}</p>
-                      <button onClick={onOpenAgent} className="mt-5 text-sm font-medium text-violet-700">查看任务 <ChevronRight className="inline h-4 w-4" /></button>
+                      <button onClick={openAgent} className="mt-5 text-sm font-medium text-violet-700">查看任务 <ChevronRight className="inline h-4 w-4" /></button>
                     </div>
                   ))}
                 </div>
@@ -282,7 +290,7 @@ export function ResearchProjects({ onOpenAgent }: { onOpenAgent: () => void }) {
           <p className="text-xs text-slate-500">组织论文、文件、调研与 Agent 任务</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={onOpenAgent} className="rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium hover:bg-slate-50">
+          <button onClick={openAgent} className="rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium hover:bg-slate-50">
             <Bot className="mr-2 inline h-4 w-4" />学术 Agent
           </button>
           <button onClick={() => setShowCreate(true)} className="rounded-xl bg-slate-950 px-3.5 py-2 text-sm font-medium text-white hover:bg-slate-800">

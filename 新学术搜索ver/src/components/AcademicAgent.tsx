@@ -1,3 +1,4 @@
+import { AgentSettingsLauncher } from "./agent-memory/AgentMemorySettings";
 import React, { useEffect, useState } from "react";
 import { BrowserResearch } from "./browser-use/BrowserResearch";
 import {
@@ -1337,7 +1338,8 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "", onTaskActive
               <p className="mx-auto mt-4 max-w-xl text-[15px] leading-7 text-slate-500">
                 描述目标，Agent 会拆解步骤、调用研究工具，并把论文、计划与实验产物集中保存。
               </p>
-              <div className="mt-9">
+              <div className="mt-5"><AgentSettingsLauncher projectId={projectContext?.id} projectName={projectContext?.title}/></div>
+              <div className="mt-4">
                 <AgentComposer
                   prompt={prompt}
                   setPrompt={setPrompt}
@@ -1405,5 +1407,5 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "", onTaskActive
     );
   }
 
-  return <BrowserResearch initialTask={messages.find(message => message.role === "user")?.text || startingPrompt} initialSkill={taskSkill || undefined} projectContext={projectContext} userCredits={userCredits} creditState={creditState} onRecharge={onRecharge} onUpgrade={onUpgrade} onNavigate={onNavigate} onBack={() => {setStarted(false); setMessages([]); setPrompt("");}} />;
+  return <BrowserResearch initialTask={messages.find(message => message.role === "user")?.text || startingPrompt} initialSkill={taskSkill || undefined} projectContext={projectContext} userCredits={userCredits} creditState={creditState} onRecharge={onRecharge} onUpgrade={onUpgrade} onNavigate={onNavigate} onBack={() => {window.history.replaceState({}, "", projectContext ? `/app/agent?${new URLSearchParams({projectId:projectContext.id,projectTitle:projectContext.title})}` : "/app/agent");setStarted(false); setMessages([]); setPrompt("");}} />;
 }
