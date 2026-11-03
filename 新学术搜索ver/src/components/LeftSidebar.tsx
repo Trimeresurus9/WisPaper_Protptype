@@ -289,12 +289,12 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenUpg
                 onClick={() => handleNavClick('institution-admin')}
                 className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'} rounded-lg transition-colors text-sm ${
                   activeNav === 'institution-admin'
-                    ? 'bg-violet-50 text-violet-700 font-medium'
+                    ? 'bg-blue-50 text-blue-600 font-semibold'
                     : 'text-gray-600 hover:bg-gray-50'
                 }`}
               >
                 <Building2 className="w-4 h-4 flex-shrink-0" />
-                {!isCollapsed && <><span>机构管理</span><span className="ml-auto rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">管理员</span></>}
+                {!isCollapsed && <><span>机构管理</span><span className="ml-auto rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">管理员</span></>}
               </button>
               {isCollapsed && (
                 <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 z-[60] pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
