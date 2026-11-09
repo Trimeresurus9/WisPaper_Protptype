@@ -3,8 +3,9 @@ import { Brain } from "lucide-react";
 import { BookOpen, Clock3, Code2, Cpu, FileText, FolderOpen, FolderPlus, Globe2, Image, LayoutGrid, Library, Lightbulb, MessageSquare, MoreHorizontal, Network, PanelRight, Scan, Search, Sparkles, Text, UserRound, WandSparkles } from "lucide-react";
 import wisPaperLogo from '../../assets/3ce02a66a6df7d8cd1f86de17846e94de4e9df61.png';
 
-export type WorkbenchView = "memory" | "common" | "files" | "browser" | "search" | "plan" | "code" | "review" | "capture" | "gpu";
+export type WorkbenchView = "ask-ai" | "memory" | "common" | "files" | "browser" | "search" | "plan" | "code" | "review" | "capture" | "gpu";
 export const workbenchTools = [
+  {id:"ask-ai", label:"Ask AI", icon:Sparkles},
   {id:"memory", label:"Agent偏好", icon:Brain},
   {id:"common", label:"常用功能", icon:LayoutGrid}, {id:"files", label:"文件浏览", icon:FolderOpen},
   {id:"browser", label:"网页执行", icon:Globe2}, {id:"search", label:"文献搜索", icon:Search},
@@ -12,6 +13,7 @@ export const workbenchTools = [
   {id:"review", label:"论文评审", icon:MessageSquare}, {id:"capture", label:"截图与选区", icon:Scan}, {id:"gpu", label:"GPU 环境", icon:Cpu}
 ] as const;
 const functions = [
+  {title:"Ask AI", lines:["了解当前任务进度", "随时提问，不打断研究"], icon:Sparkles},
   {title:"灵感发现", lines:["通过苏格拉底式对话", "逐步明确方向并形成研究计划"], icon:Lightbulb},
   {title:"论文复现", lines:["自动完成论文复现：信息收集、计划生成、GPU 分配、代码执行"], icon:Code2},
   {title:"文献综述", lines:["自动生成学术文献综述", "支持自定义篇幅与文献范围"], icon:Code2},

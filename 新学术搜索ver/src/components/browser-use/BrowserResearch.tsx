@@ -1,3 +1,4 @@
+import { AskAIPanel, useAskAI } from "../ask-ai/AskAI";
 import { useLanguage } from '../../contexts/LanguageContext';
 import { handleMemoryRequest, appendDocument, taskScope, projectScope } from "../agent-memory/store";
 import { TaskMemoryPanel, useTaskMemory } from "../agent-memory/TaskMemoryPanel";
@@ -31,6 +32,8 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
   // The task and preview share one simulated browser session. Inspecting a tab
   // does not redirect that session unless the user has taken control.
   const { t } = useLanguage();
+  const { publishAgent } = useAskAI();
+  const [askTaskId] = useState(() => crypto.randomUUID());
   const [clientTab, setClientTab] = useState(false);
   const [followPage, setFollowPage] = useState(true);
   const [inspectedPage, setInspectedPage] = useState<PageId>("paper");
@@ -98,6 +101,12 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
   const page = pages.find(p => p.id === displayedPage)!;
   const taskPage = pages.find(p => p.id === activePage)!;
   const completedSteps = phase === "done" ? 3 : step;
+  const askStatus = creditState === "empty" ? "等待补充积分" : responseRunning ? "正在生成" : responsePending ? "已暂停" : submitted ? phaseLabels[phase] : chatMessages.length ? "已完成" : "等待开始";
+  useEffect(() => {
+    publishAgent({ id: askTaskId, title, status: askStatus, step: submitted ? stepTitles[Math.min(step, 2)] : responseRunning ? '正在生成研究回答' : responsePending ? '回答生成已暂停' : '研究回答已完成', completed: submitted ? completedSteps : 0, total: submitted ? 3 : 0, blocked: ['login', 'error', 'takeover'].includes(phase) || creditState === 'empty' ? 1 : 0 });
+  }, [publishAgent, askTaskId, title, askStatus, submitted, step, completedSteps, phase, creditState, responseRunning, responsePending]);
+  useEffect(() => () => publishAgent(null), [publishAgent]);
+
   const canOperate = phase === "takeover";
   const currentAction = submitted ? phase === "done" ? "研究材料已整理" : stepTitles[step] : "浏览器页面预览";
   const taskMemory = useTaskMemory(title, submitted ? phaseLabels[phase] : "研究目标已记录，等待下一步", [...chatMessages].reverse().find(m => m.role === "user")?.text || "", projectContext?.id);
@@ -244,7 +253,7 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
             {phase === "takeover" ? <button className="aw-browser-control" onClick={resume}><Play size={14}/>交还 Agent</button> : <button className="aw-browser-control" disabled={!attached && !submitted} onClick={takeOver}><MousePointer2 size={14}/>控制浏览器</button>}
             <button className="aw-browser-close" aria-label="关闭浏览器面板" onClick={()=>setPanelOpen(false)}><X size={19}/></button>
           </div>
-        </> : <><strong>{workbench === 'memory' ? t('agentPreferences.title') : workbenchTools.find(t=>t.id===workbench)?.label}</strong><button aria-label="收起工作台" onClick={()=>setPanelOpen(false)}><PanelRight size={19}/></button></>}
+        </> : <><div className="aw-workbench-tabs" role="tablist" aria-label="工作台与 Ask AI"><button role="tab" aria-selected={workbench !== "ask-ai"} onClick={()=>setWorkbench("common")}>工作台</button><button role="tab" aria-selected={workbench === "ask-ai"} onClick={()=>setWorkbench("ask-ai")}>Ask AI</button></div><button aria-label="收起工作台" onClick={()=>setPanelOpen(false)}><PanelRight size={19}/></button></>}
       </header>}
       <section className="br-conversation" aria-label="Agent 研究对话">
         <div className="br-chat-scroll">
@@ -282,8 +291,9 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
       </section>
       {panelOpen && <section className="aw-workbench-body" aria-label="任务工作台">
       {workbench === "memory" && <TaskMemoryPanel memory={taskMemory} projectContext={projectContext}/>}
-      {workbench === "common" && <CommonFunctions onSelect={selectSkill} onBrowser={selectBrowserUse}/>}
-      {workbench !== "memory" && workbench !== "common" && workbench !== "browser" && <AuxiliaryWorkbench view={workbench} savedProject={savedProject} onSelect={selectSkill}/>}
+      {workbench === "common" && <CommonFunctions onSelect={title => title === "Ask AI" ? setWorkbench("ask-ai") : selectSkill(title)} onBrowser={selectBrowserUse}/>}
+      {workbench === "ask-ai" && <AskAIPanel />}
+      {workbench !== "ask-ai" && workbench !== "memory" && workbench !== "common" && workbench !== "browser" && <AuxiliaryWorkbench view={workbench} savedProject={savedProject} onSelect={selectSkill}/>}
       <section className="br-browser" aria-label="网页执行预览" hidden={workbench !== "browser"}>
         <div className="aw-browser-intro"><span><Globe2 size={16}/>{clientTab ? "客户端网页标签页" : "网页执行预览"}</span><button disabled={busy} onClick={openPicker}>{tabsCreated ? "管理任务标签页" : "新建 Agent 标签页"}<Plus size={13}/></button></div>
         {!attached && <div className="aw-browser-connect"><p>在客户端新建标签页，交给 Agent 执行网页任务。</p><small>右侧与任务共享模拟页面状态，控制浏览器后可直接操作。此原型不连接真实浏览器。</small></div>}

@@ -1,4 +1,5 @@
-import React, { useRef, useState } from 'react';
+import { useAskAI } from './ask-ai/AskAI';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlignLeft,
   AlertCircle,
@@ -64,6 +65,8 @@ const statusSequence: LibraryStatus[] = [
 ];
 
 export function MyLibrary({ papers, onPaperClick, onOpenReader }: MyLibraryProps) {
+  const askAI = useAskAI();
+  const { publishLibrary } = askAI;
   const { language } = useLanguage();
   const isZh = language === 'zh';
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
@@ -123,6 +126,9 @@ export function MyLibrary({ papers, onPaperClick, onOpenReader }: MyLibraryProps
     .filter(({ paper }) => !deletedPaperIds.has(paper.id));
   const selectedPapers = rows.filter(({ paper }) => selectedRows.has(paper.id)).map(({ paper }) => paper);
 
+  const askLibraryContext = JSON.stringify({ selected: selectedPapers.map(p => ({ id: p.id, title: p.title })), available: rows.map(({ paper: p }) => ({ id: p.id, title: p.title })) });
+  useEffect(() => { publishLibrary(JSON.parse(askLibraryContext)); }, [publishLibrary, askLibraryContext]);
+  useEffect(() => { if (askAI.open) setChatOpen(false); }, [askAI.open]);
   const toggleRow = (id: string) => {
     const next = new Set(selectedRows);
     if (next.has(id)) {
@@ -541,6 +547,7 @@ export function MyLibrary({ papers, onPaperClick, onOpenReader }: MyLibraryProps
       >
         {selectedPapers.length > 0 && (
           <div className={`pointer-events-auto flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-[0_18px_48px_-22px_rgba(15,23,42,0.38)] backdrop-blur-xl ${chatOpen ? 'pointer-events-none' : ''}`}>
+            <button type="button" onClick={() => askAI.openChat('selected_files')} className="inline-flex h-10 items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 text-sm font-medium text-blue-600"><Sparkles className="h-4 w-4" />Ask AI</button>
             <button
               type="button"
               onClick={() => runBatchAction('survey')}
@@ -578,166 +585,17 @@ export function MyLibrary({ papers, onPaperClick, onOpenReader }: MyLibraryProps
             )}
           </div>
         )}
-        <div className={`w-full max-w-5xl rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-[0_24px_70px_-26px_rgba(15,23,42,0.35)] backdrop-blur-xl ${chatOpen ? 'pointer-events-none' : 'pointer-events-auto'}`}>
-          {renderSelectedPaperCards()}
-          <textarea
-            value={assistantQuestion}
-            onChange={(event) => {
-              setAssistantQuestion(event.target.value);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                submitAssistantQuestion();
-              }
-            }}
-            placeholder={isZh ? '向知识助手提问，或试试「总结这篇文档」「翻译这段话…」' : 'Ask the knowledge assistant, or try “Summarize this document” or “Translate this passage…”'}
-            aria-label={isZh ? '向知识助手提问' : 'Ask the knowledge assistant'}
-            className="h-16 w-full resize-none bg-transparent px-3 py-2 text-sm leading-6 text-slate-800 outline-none placeholder:text-slate-400"
-          />
 
-          {assistantAttachment && (
-            <div className="mx-3 mb-2 flex w-fit items-center gap-2 rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] text-slate-600">
-              <FileText className="h-3.5 w-3.5" />
-              <span className="max-w-60 truncate">{assistantAttachment}</span>
-              <button
-                type="button"
-                onClick={() => setAssistantAttachment('')}
-                className="text-slate-400 transition-colors hover:text-slate-700"
-                aria-label={isZh ? '移除附件' : 'Remove attachment'}
-              >
-                <XCircle className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => assistantFileInputRef.current?.click()}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50 active:scale-95"
-                aria-label={isZh ? '添加附件' : 'Add attachment'}
-              >
-                <Plus className="h-4 w-4" />
-              </button>
-
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowScopeMenu((current) => !current);
-                    setShowLengthMenu(false);
-                  }}
-                  className="inline-flex h-9 items-center gap-2 rounded-full border border-slate-200 px-3.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
-                  aria-expanded={showScopeMenu}
-                >
-                  <FileText className="h-4 w-4 text-slate-500" />
-                  <span>{assistantScope}</span>
-                  <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-                </button>
-                {showScopeMenu && (
-                  <div className="absolute bottom-11 left-0 w-40 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
-                    {(isZh ? ['所选文件', '知识库', 'web资源库'] : ['Selected files', 'Library', 'Web resources']).map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        onClick={() => {
-                          setAssistantScope(option);
-                          setShowScopeMenu(false);
-                        }}
-                        className={`w-full rounded-lg px-3 py-2 text-left text-xs transition-colors ${
-                          assistantScope === option ? 'bg-slate-100 font-medium text-slate-950' : 'text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        {option}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowLengthMenu((current) => !current);
-                    setShowScopeMenu(false);
-                  }}
-                  className="inline-flex h-9 items-center gap-2 rounded-full border border-slate-200 px-3.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
-                  aria-expanded={showLengthMenu}
-                >
-                  <AlignLeft className="h-4 w-4 text-slate-500" />
-                  <span>{answerLength}</span>
-                  <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-                </button>
-                {showLengthMenu && (
-                  <div className="absolute bottom-11 left-0 w-32 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
-                    {(isZh ? ['简短', '中', '详细'] : ['Short', 'Medium', 'Detailed']).map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        onClick={() => {
-                          setAnswerLength(option);
-                          setShowLengthMenu(false);
-                        }}
-                        className={`w-full rounded-lg px-3 py-2 text-left text-xs transition-colors ${
-                          answerLength === option ? 'bg-slate-100 font-medium text-slate-950' : 'text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        {option}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-            </div>
-
-            <button
-              type="button"
-              onClick={submitAssistantQuestion}
-              disabled={!assistantQuestion.trim() || assistantThinking}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-white transition-all hover:bg-slate-800 active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-white"
-              aria-label={isZh ? '发送问题' : 'Send question'}
-            >
-              <ArrowUp className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
       </div>
 
       <aside
-        style={{ width: chatOpen ? panelWidth : 56 }}
+        style={{ width: chatOpen ? panelWidth : 0, marginLeft: chatOpen ? 12 : 0, borderLeftWidth: chatOpen ? 1 : 0 }}
         className={`relative z-40 ml-3 flex h-full shrink-0 flex-col overflow-hidden border-l border-slate-200 bg-white ${
           isResizingPanel ? '' : 'transition-[width] duration-300 ease-out'
         }`}
         aria-label={chatOpen ? (isZh ? '文献工作栏' : 'Paper workspace') : (isZh ? '已折叠的文献工作栏' : 'Collapsed paper workspace')}
       >
-        {!chatOpen ? (
-          <div className="flex h-full w-14 flex-col items-center border-r border-slate-100 py-3">
-            <button
-              type="button"
-              onClick={() => setChatOpen(true)}
-              className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-950 text-white transition hover:bg-slate-800"
-              aria-label={isZh ? '展开文献工作栏' : 'Expand paper workspace'}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setActivePanelTab('chat');
-                setChatOpen(true);
-              }}
-              className="mt-4 flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition hover:bg-blue-100 active:scale-95"
-              aria-label={isZh ? '打开 AI Chat' : 'Open AI Chat'}
-              title="AI Chat"
-            >
-              <Bot className="h-4 w-4" />
-            </button>
-          </div>
-        ) : (
+        {!chatOpen ? null : (
           <>
             <button
               type="button"
@@ -751,18 +609,18 @@ export function MyLibrary({ papers, onPaperClick, onOpenReader }: MyLibraryProps
             <nav className="flex h-14 shrink-0 items-stretch border-b border-slate-100 pl-3 pr-2" aria-label={panelMode === 'chat' ? (isZh ? '问答工具' : 'Chat tools') : (isZh ? '文献工具' : 'Paper tools')}>
               <div className={`grid min-w-0 flex-1 ${panelMode === 'chat' ? 'grid-cols-1' : 'grid-cols-4'}`}>
                 {(panelMode === 'chat'
-                  ? [{ tab: 'chat' as const, label: 'AI Chat', icon: Bot }]
+                  ? [{ tab: 'chat' as const, label: 'Ask AI', icon: Bot }]
                   : [
                       { tab: 'info' as const, label: isZh ? '信息' : 'Info', icon: Info },
                       { tab: 'notes' as const, label: isZh ? '笔记' : 'Notes', icon: StickyNote },
                       { tab: 'comments' as const, label: isZh ? '评论' : 'Comments', icon: MessageCircle },
-                      { tab: 'chat' as const, label: 'AI Chat', icon: Bot },
+                      { tab: 'chat' as const, label: 'Ask AI', icon: Bot },
                     ]
                 ).map(({ tab, label, icon: Icon }) => (
                   <button
                     key={tab}
                     type="button"
-                    onClick={() => setActivePanelTab(tab)}
+                    onClick={() => { if (tab === 'chat') { setChatOpen(false); askAI.openChat(selectedPapers.length ? 'selected_files' : 'product_help'); } else setActivePanelTab(tab); }}
                     className={`relative flex min-w-0 items-center justify-center gap-1.5 text-xs font-medium transition ${
                       tab === 'chat' && panelMode === 'document' ? 'border-l border-slate-100' : ''
                     } ${

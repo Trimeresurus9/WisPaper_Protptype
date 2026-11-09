@@ -760,6 +760,7 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenUpg
       </nav>
 
       {/* User Panel */}
+      <div data-onboarding-anchor="account">
       <UserPanel 
         onOpenInvite={onOpenInvite} 
         onOpenPaywall={onOpenPaywall} 
@@ -768,6 +769,8 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenUpg
         onOpenSettings={() => setShowSettingsModal(true)}
         isCollapsed={isCollapsed}
       />
+
+      </div>
 
       {/* Settings Modal */}
       <SettingsModal 

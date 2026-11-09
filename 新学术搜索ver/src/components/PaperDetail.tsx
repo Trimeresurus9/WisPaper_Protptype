@@ -14,6 +14,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 interface PaperDetailProps {
   paper: Paper | null;
   onBack: () => void;
+  backLabel?: string;
   initialLocalFile?: File | null;
   onOpenFigureToPPTX?: () => void;
 }
@@ -45,7 +46,7 @@ const defaultShareCommentsEn = [
   'Sharing a good read. Feel free to join the discussion.',
 ];
 
-export function PaperDetail({ paper, onBack, initialLocalFile = null, onOpenFigureToPPTX }: PaperDetailProps) {
+export function PaperDetail({ paper, onBack, backLabel = 'Back to Library', initialLocalFile = null, onOpenFigureToPPTX }: PaperDetailProps) {
   const { language } = useLanguage();
   const isZh = language === 'zh';
   const [activeTab, setActiveTab] = useState<TabType>('blog');
@@ -585,8 +586,8 @@ export function PaperDetail({ paper, onBack, initialLocalFile = null, onOpenFigu
           <button
             onClick={onBack}
             className="inline-flex items-center justify-center rounded p-1.5 text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-900"
-            title="Back to Library"
-            aria-label="Back to Library"
+            title={backLabel}
+            aria-label={backLabel}
           >
             <Library className="w-4 h-4" />
           </button>
