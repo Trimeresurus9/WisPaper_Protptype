@@ -18,6 +18,8 @@ interface ExplorePageProps {
   userCredits: number;
   onUserCreditsChange: (credits: number) => void;
   showMockConsole?: boolean;
+  onboardingSearchActive?: boolean;
+  enableLegacyTour?: boolean;
 }
 
 const welcomes = [
@@ -57,7 +59,7 @@ const mockScenarios: Array<{ id: string; mode: Mode; title: string; description:
   { id: 'agent-task', mode: 'agent', title: 'Agent · 复杂任务', description: '携带上下文创建云端任务', input: '围绕多模态 Agent 的长期记忆，帮我发现 3 个有研究价值的选题' },
 ];
 
-export function ExplorePage({ embedded = false, children, onSearch, onAsk, onAgent, onLibrary, onProjects, userCredits, onUserCreditsChange, showMockConsole = false }: ExplorePageProps) {
+export function ExplorePage({ embedded = false, children, onSearch, onAsk, onAgent, onLibrary, onProjects, userCredits, onUserCreditsChange, showMockConsole = false, onboardingSearchActive = false, enableLegacyTour = false }: ExplorePageProps) {
   const [mode, setMode] = React.useState<Mode>('ask');
   const [query, setQuery] = React.useState('');
   const [thinking, setThinking] = React.useState<'low' | 'medium' | 'high'>('medium');
@@ -69,12 +71,15 @@ export function ExplorePage({ embedded = false, children, onSearch, onAsk, onAge
   const [mockConsoleOpen, setMockConsoleOpen] = React.useState(false);
   const welcome = React.useMemo(() => welcomes[Math.floor(Math.random() * welcomes.length)], []);
 
+  React.useEffect(() => { if (onboardingSearchActive) setMode('search'); }, [onboardingSearchActive]);
+
   React.useEffect(() => {
+    if (!enableLegacyTour) return;
     try { if (!localStorage.getItem('wispaper-explore-tour-v1')) setTourStep(0); } catch { setTourStep(0); }
     const retrigger = () => setTourStep(0);
     window.addEventListener('wispaper:retrigger-tour', retrigger);
     return () => window.removeEventListener('wispaper:retrigger-tour', retrigger);
-  }, []);
+  }, [enableLegacyTour]);
 
   React.useEffect(() => {
     if (tourStep >= 0 && tour[tourStep]?.mode) setMode(tour[tourStep].mode!);
@@ -131,7 +136,7 @@ export function ExplorePage({ embedded = false, children, onSearch, onAsk, onAge
 
         <section className="relative mx-auto mt-10 max-w-[900px]">
           <div className="rounded-[24px] border border-slate-200 bg-white p-3 shadow-[0_24px_80px_-32px_rgba(30,64,175,.35)]">
-            <textarea value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }} placeholder={modeMeta[mode].placeholder} className="min-h-[132px] w-full resize-none rounded-2xl border-0 bg-transparent px-4 py-4 text-[16px] leading-7 outline-none placeholder:text-slate-400" />
+            <textarea data-onboarding-input="home" data-onboarding-anchor="home" aria-label="研究问题" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }} placeholder={modeMeta[mode].placeholder} className="min-h-[132px] w-full resize-none rounded-2xl border-0 bg-transparent px-4 py-4 text-[16px] leading-7 outline-none placeholder:text-slate-400" />
             <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-2 pt-3">
               <div className="flex rounded-xl bg-slate-100 p-1">
                 {(Object.keys(modeMeta) as Mode[]).map(key => { const Icon = modeMeta[key].icon; return <button key={key} data-tour={key} onClick={() => { setMode(key); setResult('none'); }} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition ${mode === key ? 'bg-white text-[#1b87ff] shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}><Icon className="h-4 w-4" />{modeMeta[key].label}</button>; })}

@@ -1,10 +1,15 @@
 import React from 'react';
+import { AskAIMockControls } from './ask-ai/AskAI';
+import { OnboardingMockControls } from './onboarding/OnboardingMockControls';
+import type { OnboardingController, OnboardingPage } from './onboarding/useOnboarding';
 import { Copy, Play, RotateCcw, TerminalSquare, X } from 'lucide-react';
 import { CREATOR_DISCOUNT_CODE, domesticPlanRank, domesticPlans, domesticStorageOptions, nextMonth, nextYear, type PlanId, useBilling } from '../contexts/BillingContext';
 
 interface Scenario { title: string; description: string; input: string; action: 'ask' | 'search' | 'agent' }
 
 interface MockConsoleProps {
+  onboarding: OnboardingController;
+  onNavigateOnboarding: (page: OnboardingPage) => void;
   onOpenBilling: () => void;
   currentView: string;
   userCredits: number;
@@ -37,9 +42,33 @@ const scenarios: Record<string, Scenario[]> = {
   ],
 };
 
-export function MockConsole({ currentView, userCredits, onUserCreditsChange, onAsk, onSearch, onAgent, onOpenBilling }: MockConsoleProps) {
+export function MockConsole({ currentView, userCredits, onUserCreditsChange, onAsk, onSearch, onAgent, onOpenBilling, onboarding, onNavigateOnboarding }: MockConsoleProps) {
   const { market, setMarket, subscription, setSubscription, outcome, setOutcome, creatorDiscountPercent, setCreatorDiscountPercent, scenario } = useBilling();
   const [open, setOpen] = React.useState(false);
+  const [mockTab, setMockTab] = React.useState<'onboarding' | 'other'>('onboarding');
+  const mockRoot = React.useRef<HTMLDivElement>(null);
+  const dragOffset = React.useRef<{ x: number; y: number } | null>(null);
+  const [mockPosition, setMockPosition] = React.useState<{ x: number; y: number } | null>(null);
+  const moveMock = (event: React.PointerEvent<HTMLElement>) => {
+    if (!dragOffset.current || !mockRoot.current) return;
+    const box = mockRoot.current.getBoundingClientRect();
+    setMockPosition({ x: Math.max(8, Math.min(event.clientX - dragOffset.current.x, innerWidth - box.width - 8)), y: Math.max(8, Math.min(event.clientY - dragOffset.current.y, innerHeight - box.height - 8)) });
+  };
+  React.useLayoutEffect(() => {
+    window.dispatchEvent(new Event('wispaper:onboarding-mock-move'));
+  }, [mockPosition]);
+  React.useEffect(() => {
+    const clampPosition = () => {
+      const box = mockRoot.current?.getBoundingClientRect();
+      if (!box) return;
+      setMockPosition(current => current ? { x: Math.max(8, Math.min(current.x, innerWidth - box.width - 8)), y: Math.max(8, Math.min(current.y, innerHeight - box.height - 8)) } : null);
+    };
+    clampPosition();
+    window.addEventListener('resize', clampPosition);
+    return () => window.removeEventListener('resize', clampPosition);
+  }, [open, mockTab, currentView]);
+  React.useEffect(() => { const collapse = () => setOpen(false); window.addEventListener('wispaper:ask-ai-open', collapse); return () => window.removeEventListener('wispaper:ask-ai-open', collapse); }, []);
+  React.useEffect(() => { if (onboarding.active && window.innerWidth < 760) setOpen(false); }, [onboarding.active]);
   const pageScenarios = scenarios[currentView] ?? [];
   const isAgentPage = currentView === 'academic-agent';
   const activeMembership = Boolean(subscription.end && new Date(subscription.end).getTime() > Date.now());
@@ -76,14 +105,27 @@ export function MockConsole({ currentView, userCredits, onUserCreditsChange, onA
   };
 
   const retriggerTour = () => {
-    try { localStorage.removeItem('wispaper-explore-tour-v1'); } catch {}
-    window.dispatchEvent(new Event('wispaper:retrigger-tour'));
+    setMockTab('onboarding');
+    onboarding.start();
   };
 
-  return <div className="fixed bottom-5 right-5 z-[13000]">
-    {open && <div className="mb-3 flex max-h-[min(720px,80vh)] w-[min(390px,calc(100vw-40px))] flex-col overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 text-white shadow-2xl">
+  return <div ref={mockRoot} style={mockPosition ? { left: mockPosition.x, top: mockPosition.y, right: 'auto', bottom: 'auto' } : undefined} className="fixed bottom-5 left-5 z-[13000]" data-prototype-mock>
+    {open && (onboarding.available || currentView === 'quick-paper') && mockTab === 'onboarding' && <section className="wp-ob-mock" aria-label="Mock 引导体验控制">
+      <header className="wp-ob-mock-header" onPointerDown={event => {
+        if ((event.target as HTMLElement).closest('button') || !mockRoot.current) return;
+        const box = mockRoot.current.getBoundingClientRect();
+        dragOffset.current = { x: event.clientX - box.left, y: event.clientY - box.top };
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }} onPointerMove={moveMock} onPointerUp={() => { dragOffset.current = null; }} onPointerCancel={() => { dragOffset.current = null; }}><div><strong>Mock</strong><span>体验控制</span></div><button aria-label="收起 Mock" onClick={() => setOpen(false)}><X size={16} /></button></header>
+      <OnboardingMockControls controller={onboarding} onNavigate={onNavigateOnboarding} />
+      <AskAIMockControls />
+      <button className="wp-ob-other-mocks" onClick={() => setMockTab('other')}>其他 Mock 设置 →</button>
+    </section>}
+    {open && ((!onboarding.available && currentView !== 'quick-paper') || mockTab === 'other') && <div className="mb-3 flex max-h-[min(720px,80vh)] w-[min(390px,calc(100vw-40px))] flex-col overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 text-white shadow-2xl">
       <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3"><div className="flex items-center gap-2 text-sm font-semibold"><TerminalSquare className="h-4 w-4 text-emerald-400" />Mock 控制台</div><button onClick={() => setOpen(false)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-800"><X className="h-4 w-4" /></button></div>
       <div className="border-b border-slate-800 px-4 py-3 text-xs text-slate-400">当前页面：<span className="font-semibold text-slate-200">{currentView}</span></div>
+      {(onboarding.available || currentView === 'quick-paper') && <button onClick={() => setMockTab('onboarding')} className="border-b border-slate-800 px-4 py-3 text-left text-xs text-blue-300">← 返回 Onboarding 控制</button>}
+      <AskAIMockControls />
       <div className="space-y-3 border-b border-slate-800 p-4">
         <div className="flex items-center justify-between"><span className="text-sm font-semibold">地区版本</span><button type="button" role="switch" aria-label="国内版" aria-checked={market === 'domestic'} onClick={() => setMarket(market === 'domestic' ? 'overseas' : 'domestic')} className={`relative h-6 w-11 rounded-full ${market === 'domestic' ? 'bg-blue-500' : 'bg-slate-600'}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${market === 'domestic' ? 'left-6' : 'left-1'}`} /></button></div>
         <div className="grid grid-cols-2 gap-2">{(['domestic', 'overseas'] as const).map((value) => <button key={value} aria-pressed={market === value} onClick={() => setMarket(value)} className={`rounded-lg border px-3 py-2 text-xs ${market === value ? 'border-blue-400 bg-blue-500/20 text-blue-200' : 'border-slate-700 text-slate-400'}`}>{value === 'domestic' ? '国内版 · 支付宝' : '国外版 · Stripe'}</button>)}</div>
@@ -107,12 +149,12 @@ export function MockConsole({ currentView, userCredits, onUserCreditsChange, onA
         <label className="block text-xs text-slate-400">博主优惠码模拟 <span className="font-mono text-blue-200">{CREATOR_DISCOUNT_CODE}</span><select aria-label="Mock 博主折扣" value={creatorDiscountPercent} onChange={(event) => setCreatorDiscountPercent(Number(event.target.value))} className="mt-2 block w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-slate-200"><option value={10}>首月优惠 10%</option><option value={25}>首月优惠 25%</option><option value={30}>首月优惠 30%</option></select><span className="mt-1 block text-[11px] leading-5 text-slate-500">演示码只抵扣首月对应金额，优先于首月 8 折，不叠加。</span></label>
         <label className="block text-xs text-slate-400">下次模拟支付结果<select value={outcome} onChange={(event) => setOutcome(event.target.value as typeof outcome)} className="mt-2 block w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-slate-200"><option value="success">支付与签约成功</option><option value="payment-failed">支付失败 · 不发放权益</option><option value="sign-failed">支付成功 · 签约失败</option></select></label></>}
       </div>
-      {currentView === 'explore' && <div className="border-b border-slate-800 p-3"><button onClick={retriggerTour} className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-500/40 bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-300"><RotateCcw className="h-3.5 w-3.5" />重新触发首次打开引导</button></div>}
+      {currentView === 'explore' && <div className="border-b border-slate-800 p-3"><button onClick={retriggerTour} className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-500/40 bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-300"><RotateCcw className="h-3.5 w-3.5" />重新开始 Onboarding 体验</button></div>}
       {isAgentPage && <div className="border-b border-slate-800 p-3"><div className="mb-2 flex items-center justify-between"><span className="text-xs font-semibold text-slate-300">当前积分</span><span className="font-mono text-xs text-emerald-400">{userCredits.toLocaleString()} credits</span></div><div className="grid grid-cols-3 gap-2"><button onClick={() => onUserCreditsChange(50000)} className={`rounded-lg border px-2 py-2 text-[11px] font-semibold ${userCredits >= 10000 ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-300' : 'border-slate-700 text-slate-400'}`}>充足<br/>50,000</button><button onClick={() => onUserCreditsChange(8000)} className={`rounded-lg border px-2 py-2 text-[11px] font-semibold ${userCredits > 0 && userCredits < 10000 ? 'border-amber-500/60 bg-amber-500/15 text-amber-300' : 'border-slate-700 text-slate-400'}`}>余额较低<br/>8,000</button><button onClick={() => onUserCreditsChange(0)} className={`rounded-lg border px-2 py-2 text-[11px] font-semibold ${userCredits === 0 ? 'border-blue-500/60 bg-blue-500/15 text-blue-300' : 'border-slate-700 text-slate-400'}`}>无可用积分<br/>0</button></div><p className="mt-2 text-[11px] leading-5 text-slate-500">低余额仍可启动；0 积分进入工作区后保留任务，等待补充积分。</p></div>}
       <div className="space-y-2 overflow-y-auto p-3">
         {pageScenarios.length ? pageScenarios.map((scenario) => <div key={scenario.title} className="rounded-xl border border-slate-800 bg-slate-900 p-3"><div className="text-sm font-semibold text-slate-100">{scenario.title}</div><div className="mt-1 text-xs text-slate-500">{scenario.description}</div><div className="mt-3 rounded-lg bg-slate-950 px-3 py-2 text-xs leading-5 text-slate-400">{scenario.input}</div><div className="mt-3 flex justify-end gap-2"><button onClick={() => navigator.clipboard?.writeText(scenario.input)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300"><Copy className="h-3.5 w-3.5" />复制</button><button onClick={() => run(scenario)} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-slate-950"><Play className="h-3.5 w-3.5" />运行</button></div></div>) : <div className="rounded-xl border border-slate-800 bg-slate-900 p-4 text-xs leading-5 text-slate-500">当前页面暂无专属 Mock 选项。</div>}
       </div>
     </div>}
-    <button onClick={() => setOpen(!open)} className="ml-auto flex h-12 items-center gap-2 rounded-full bg-slate-950 px-4 text-sm font-semibold text-white shadow-xl transition hover:-translate-y-0.5 hover:bg-slate-800"><TerminalSquare className="h-4 w-4 text-emerald-400" />Mock</button>
+    <button aria-label="Mock" data-onboarding-mock-toggle onClick={() => setOpen(!open)} className="ml-auto flex h-12 items-center gap-2 rounded-full bg-slate-950 px-4 text-sm font-semibold text-white shadow-xl transition hover:-translate-y-0.5 hover:bg-slate-800"><TerminalSquare className="h-4 w-4 text-emerald-400" />Mock</button>
   </div>;
 }

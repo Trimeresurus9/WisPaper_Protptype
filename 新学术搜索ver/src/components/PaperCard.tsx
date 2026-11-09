@@ -64,7 +64,7 @@ export function PaperCard({ paper, isSelected, onSelect }: PaperCardProps) {
             </span>
             
             <h3 className="flex-1 text-sm font-semibold text-blue-600 leading-snug hover:underline cursor-pointer">
-              {paper.title}
+              <button type="button" className="text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500" onClick={event => { event.stopPropagation(); onSelect(); }}>{paper.title}</button>
             </h3>
             <div className="flex items-center gap-1 flex-shrink-0">
               <svg className="w-3.5 h-3.5 text-blue-600" viewBox="0 0 24 24" fill="currentColor">

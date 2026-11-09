@@ -3,7 +3,8 @@ import { SearchBar } from "./components/SearchBar";
 import { SearchResults } from "./components/SearchResults";
 import { SearchThinkingPanel } from "./components/SearchThinkingPanel";
 import { LeftSidebar } from "./components/LeftSidebar";
-import { RightPanel } from "./components/RightPanel";
+import { AskAIProvider } from "./components/ask-ai/AskAI";
+import { SearchAskAI } from "./components/ask-ai/SearchAskAI";
 import { PaperDetail } from "./components/PaperDetail";
 import { MyLibrary } from "./components/MyLibrary";
 import { ScholarSearchHome, extractAcademicIdentifiers, type AcademicIdentifier } from "./components/ScholarSearchHome";
@@ -22,6 +23,8 @@ import { FigureToPPTX } from "./components/FigureToPPTX";
 import { ExcelToFigure } from "./components/ExcelToFigure";
 import { ToolsPage } from "./components/ToolsPage";
 import { MockConsole } from "./components/MockConsole";
+import { useOnboarding } from "./components/onboarding/useOnboarding";
+import { OnboardingExperience } from "./components/onboarding/OnboardingExperience";
 import { BillingProvider } from './contexts/BillingContext';
 import { QuickPaperPage } from "./components/QuickPaperPage";
 import { SearchMoreButton } from "./components/SearchMoreButton";
@@ -70,6 +73,18 @@ const getViewFromPath = (pathname: string) => {
   return match?.[0] ?? 'home';
 };
 
+// Keep the selected paper across refreshes and browser back/forward navigation.
+const readSelectedPaper = (): Paper | null => {
+  const paperId = new URLSearchParams(window.location.search).get('paper');
+  const paper = mockPapers.find(item => item.id === paperId);
+  if (paper) return paper;
+  try {
+    const cached = JSON.parse(sessionStorage.getItem('wispaper-quick-paper-v1') || 'null');
+    if (cached && (!paperId || cached.id === paperId) && typeof cached.id === 'string' && typeof cached.title === 'string' && typeof cached.abstract === 'string' && Array.isArray(cached.authors) && Array.isArray(cached.categories)) return cached;
+  } catch {}
+  return null;
+};
+
 // Suppress Figma-specific prop warnings in development
 if (typeof console !== 'undefined') {
   const originalError = console.error;
@@ -92,11 +107,20 @@ export default function App() {
     categories: [],
     sortBy: "relevance",
   };
-  const [searchQuery, setSearchQuery] = useState("");
-  const [hasSearched, setHasSearched] = useState(false);
+  const [askSearchCache] = useState(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem('wispaper-current-search-v1') || 'null');
+      if (typeof cached?.id === 'string' && typeof cached?.query === 'string') return cached;
+    } catch {}
+    return { id: crypto.randomUUID(), query: '', hasSearched: false };
+  });
+  const [searchQuery, setSearchQuery] = useState(askSearchCache.query);
+  const [askSearchSessionId, setAskSearchSessionId] = useState(askSearchCache.id);
+  const [hasSearched, setHasSearched] = useState(askSearchCache.hasSearched === true);
+  React.useEffect(() => { try { localStorage.setItem('wispaper-current-search-v1', JSON.stringify({ id: askSearchSessionId, query: searchQuery, hasSearched })); } catch {} }, [askSearchSessionId, searchQuery, hasSearched]);
   const [filters, setFilters] = useState<FilterOptions>(defaultFilters);
   const [selectedPaper, setSelectedPaper] =
-    useState<Paper | null>(null);
+    useState<Paper | null>(readSelectedPaper);
   const initialView = typeof window !== 'undefined' ? (['tickets', 'feedback'].includes(new URLSearchParams(window.location.search).get('mock') ?? '') ? 'all-feeds' : getViewFromPath(window.location.pathname)) : 'home';
   const [viewMode, setViewMode] = useState<
     "home" | "explore" | "list" | "quick-paper" | "detail" | "reader" | "library" | "scholar-qa" | "all-feeds" | "paper-reproduction" | "idea-discovery" | "fudan-collection-search" | "academic-agent" | "research-projects" | "research-canvas" | "truecite" | "tools" | "figure-to-pptx" | "figure-to-excel" | "excel-to-figure" | "institution-admin"
@@ -120,6 +144,7 @@ export default function App() {
   const [scholarQAKey, setScholarQAKey] = useState(0);
   const [agentKey, setAgentKey] = useState(0);
   const [agentTaskActive, setAgentTaskActive] = useState(false);
+  const onboarding = useOnboarding(viewMode, agentTaskActive, selectedPaper?.isOpenAccess === true);
   const [initialAskQuestion, setInitialAskQuestion] = useState('');
   const [initialAgentPrompt, setInitialAgentPrompt] = useState('');
   const [mockUserCredits, setMockUserCredits] = useState(50000);
@@ -138,6 +163,7 @@ export default function App() {
 
     const handlePopState = () => {
       historyNavigationRef.current = true;
+      setSelectedPaper(readSelectedPaper());
       setViewMode(getViewFromPath(window.location.pathname) as any);
     };
 
@@ -151,14 +177,23 @@ export default function App() {
       return;
     }
 
+    const paperRoute = viewMode === 'quick-paper' || viewMode === 'detail';
     const nextPath = viewRoutes[viewMode] ?? '/';
     const isProjectDetail = viewMode === 'research-projects' && /^\/app\/projects\/\d+$/.test(window.location.pathname);
-    if (window.location.pathname !== nextPath && !isProjectDetail) {
-      const mockRoleParam = new URLSearchParams(window.location.search).get('mockRole');
-      const roleQuery = mockRoleParam ? `?${new URLSearchParams({mockRole: mockRoleParam})}` : '';
-      window.history.pushState({ view: viewMode }, '', `${nextPath}${roleQuery}`);
+    const query = new URLSearchParams(window.location.search);
+    if (paperRoute && selectedPaper) query.set('paper', selectedPaper.id);
+    else query.delete('paper');
+    const nextUrl = nextPath + (query.size ? `?${query}` : '');
+    if (window.location.pathname + window.location.search !== nextUrl && !isProjectDetail) {
+      window.history.pushState({ view: viewMode }, '', nextUrl);
     }
-  }, [viewMode]);
+  }, [viewMode, selectedPaper?.id]);
+
+  React.useEffect(() => {
+    if (selectedPaper) {
+      try { sessionStorage.setItem('wispaper-quick-paper-v1', JSON.stringify(selectedPaper)); } catch {}
+    }
+  }, [selectedPaper]);
 
   const resolveShortcutPaper = (identifier: AcademicIdentifier): Paper => {
     const cleanValue = identifier.value.replace(/v\d+$/i, '');
@@ -271,7 +306,13 @@ export default function App() {
 
   const handleSelectPaper = (paper: Paper) => {
     setSelectedPaper(paper);
-    setViewMode("detail");
+    setViewMode("quick-paper");
+  };
+
+  const openSelectedReader = () => {
+    if (!selectedPaper?.isOpenAccess) return;
+    if (onboarding.active && onboarding.page === 'reader') onboarding.end();
+    setViewMode('detail');
   };
 
   const handleBackToList = () => {
@@ -291,6 +332,7 @@ export default function App() {
   };
 
   const handleSearch = (query: string) => {
+    setAskSearchSessionId(crypto.randomUUID());
     const identifiers = extractAcademicIdentifiers(query);
     setShortcutResults(identifiers.length > 0 ? identifiers.map(resolveShortcutPaper) : null);
     setSearchQuery(query);
@@ -333,6 +375,7 @@ export default function App() {
   };
 
   const handleStartSearchFromHome = (query?: string) => {
+    setAskSearchSessionId(crypto.randomUUID());
     setSelectedPaper(null);
     setFilters(defaultFilters);
     setShortcutResults(null);
@@ -354,6 +397,10 @@ export default function App() {
     <LanguageProvider>
       <BillingProvider>
       <FeedbackTicketsProvider>
+      <AskAIProvider view={viewMode} agentTaskActive={agentTaskActive} search={{ id: askSearchSessionId, query: searchQuery, mode: '学术搜索', count: hasSearched ? (shortcutResults || filteredPapers).length : 0 }} onboarding={onboarding}
+        onResume={guide => { setViewMode(guide.page === 'home' ? 'explore' : guide.page === 'reader' ? 'quick-paper' : 'academic-agent'); onboarding.resume(guide); }}
+        onSearch={handleStartSearchFromHome} onAgent={query => { setInitialAgentPrompt(query); setAgentKey(key => key + 1); setViewMode('academic-agent'); }}>
+
       <div className={isReaderView ? "h-screen overflow-hidden bg-white flex" : "min-h-screen bg-white flex"}>
         {/* Left Sidebar - Only show in list view, library view, and scholar-qa view */}
         {(viewMode === "explore" || viewMode === "list" || viewMode === "reader" || viewMode === "library" || viewMode === "scholar-qa" || viewMode === "all-feeds" || viewMode === "paper-reproduction" || viewMode === "idea-discovery" || viewMode === "fudan-collection-search" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "truecite" || viewMode === "tools" || viewMode === "figure-to-pptx" || viewMode === "figure-to-excel" || viewMode === "excel-to-figure" || viewMode === "institution-admin") && !(viewMode === "academic-agent" && agentTaskActive) && (
@@ -384,6 +431,7 @@ export default function App() {
           ) : viewMode === "explore" ? (
             <ExplorePage
               embedded
+              onboardingSearchActive={onboarding.active && onboarding.page === "home" && onboarding.flow.step === 0}
               onSearch={handleStartSearchFromHome}
               onAsk={(query) => {
                 setInitialAskQuestion(query);
@@ -402,6 +450,8 @@ export default function App() {
             >
               <AllFeedsWorkspace
                 showSearchHero={false}
+                researchInterests={onboarding.state.interests}
+                onResearchInterestsChange={onboarding.updateInterests}
                 onSearch={(query) => {
                   setViewMode("list");
                   handleSearch(query);
@@ -465,7 +515,7 @@ export default function App() {
           ) : viewMode === "library" ? (
             <MyLibrary
               papers={mockPapers}
-              onPaperClick={handleSelectPaper}
+              onPaperClick={paper => { setSelectedPaper(paper); setViewMode('detail'); }}
               onOpenReader={(file) => {
                 setReaderInitialFile(file ?? null);
                 setViewMode("reader");
@@ -507,12 +557,14 @@ export default function App() {
               }}
               onQuickOpen={handleQuickOpen}
             />
-          ) : viewMode === "quick-paper" && selectedPaper ? (
-            <QuickPaperPage
+          ) : viewMode === "quick-paper" ? (
+            selectedPaper ? <QuickPaperPage
+              key={selectedPaper.id}
               paper={selectedPaper}
-              onBack={() => setViewMode("explore")}
-              onOpenReader={() => setViewMode("detail")}
-            />
+              onBack={handleBackToList}
+              onWorkspace={() => setViewMode('explore')}
+              onOpenReader={openSelectedReader}
+            /> : <div className="m-auto p-12 text-center"><h1 className="text-xl font-semibold">请先选择一篇论文</h1><button className="mt-5 text-blue-600" onClick={handleBackToList}>返回搜索</button></div>
           ) : viewMode === "paper-reproduction" ? (
             <PaperReproduction />
           ) : viewMode === "idea-discovery" ? (
@@ -575,15 +627,16 @@ export default function App() {
             <PaperDetail
               paper={selectedPaper}
               initialLocalFile={null}
-              onBack={handleBackToList}
+              onBack={() => setViewMode(selectedPaper ? 'quick-paper' : 'list')}
+              backLabel={selectedPaper ? '返回快速结果页' : '返回搜索结果'}
               onOpenFigureToPPTX={() => { setFigureToPPTXFromReader(true); setViewMode('figure-to-pptx'); }}
             />
           )}
         </div>
 
         {/* Right Panel - Only show in list view with search results */}
-        {viewMode === "list" && hasSearched && !shortcutResults && (
-          <RightPanel selectedPaper={selectedPaper} />
+        {viewMode === "list" && (
+          <SearchAskAI selectedPaper={selectedPaper} />
         )}
 
         {/* Search More Button - Show only in list view with search results */}
@@ -616,7 +669,16 @@ export default function App() {
           onClose={() => setShowNotificationDrawer(false)}
         />
 
+        <OnboardingExperience key={viewMode === 'quick-paper' ? selectedPaper?.id : viewMode} controller={onboarding} onOpenReader={openSelectedReader} />
+
         {!(viewMode === "academic-agent" && agentTaskActive) && <MockConsole
+          onboarding={onboarding}
+          onNavigateOnboarding={(page) => {
+            if (page === 'reader') {
+              if (!selectedPaper?.isOpenAccess) setSelectedPaper(mockPapers.find(paper => paper.isOpenAccess === true) || null);
+              setViewMode('quick-paper');
+            } else setViewMode(page === 'home' ? 'explore' : 'academic-agent');
+          }}
           onOpenBilling={() => openPricing()}
           currentView={viewMode}
           userCredits={mockUserCredits}
@@ -636,6 +698,7 @@ export default function App() {
         {/* Feedback dialog (BBS-style issue list / form / thread), driven by FeedbackTicketsContext */}
         <FeedbackModal />
       </div>
+      </AskAIProvider>
       </FeedbackTicketsProvider>
       </BillingProvider>
     </LanguageProvider>

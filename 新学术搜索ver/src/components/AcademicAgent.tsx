@@ -482,6 +482,8 @@ function AgentComposer({
             </button>
           )}
           <textarea
+            data-onboarding-input="agent" data-onboarding-anchor="agent"
+            aria-label="Agent 研究任务"
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
             onKeyDown={(event) => {
