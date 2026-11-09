@@ -89,10 +89,10 @@ export function AgentResponse({ task, status, onStatusChange, canReplay = true }
     {elapsed >= ROUND_TWO_START && <ThinkingLine key={`${replay}-1`} round={1} elapsed={elapsed - ROUND_TWO_START} stopped={status === "stopped"}/>}
     {complete && <div className="ar-conclusion"><hr/><h3>结论</h3><p>围绕「{task}」，建议先明确研究范围，再建立证据对照，最后形成可验证的研究方案。</p><ol><li><strong>明确范围：</strong>确定研究对象、材料范围与预期产出。</li><li><strong>建立对照：</strong>按研究问题、方法和结论整理资料，保留来源与适用条件。</li><li><strong>推进验证：</strong>优先核查证据缺口，再细化执行步骤与验收标准。</li></ol><p className="ar-result-note">本轮为输出交互演示，工具结果与结论均为示例。</p></div>}
     <div className="ar-response-controls">
-      {!complete ? <>
+      {canReplay && !complete ? <>
         <button onClick={() => onStatusChange(status === "stopped" ? "running" : "stopped")}>{status === "stopped" ? <Play size={12}/> : <Pause size={12}/>} {status === "stopped" ? "继续演示" : "暂停演示"}</button>
         <button title="跳到下一阶段" onClick={() => setElapsed(value => STAGE_MARKS.find(mark => mark > value) ?? COMPLETE_MS)}><FastForward size={12}/>快进</button>
-      </> : canReplay && <button onClick={() => {setElapsed(0); setReplay(value => value + 1); onStatusChange("running");}}><RotateCcw size={12}/>重新演示</button>}
+      </> : canReplay && complete && <button onClick={() => {setElapsed(0); setReplay(value => value + 1); onStatusChange("running");}}><RotateCcw size={12}/>重新演示</button>}
       <span role="status">{complete ? "回答已完成" : status === "stopped" ? "演示已暂停" : "点击思考行，查看过程"}</span>
     </div>
   </div>;
