@@ -39,11 +39,12 @@ export function finishPreparation(env: Environment, now: number): Environment {
   return env;
 }
 export function formatDuration(ms: number) {
-  const seconds = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(seconds / 60);
+  if (ms <= 0) return '0min';
+  const minutes = Math.floor(ms / 60000);
+  if (minutes === 0) return '<1min';
   const hours = Math.floor(minutes / 60);
-  if (hours >= 24) return `${Math.floor(hours / 24)}天 ${hours % 24}小时`;
-  return hours ? `${hours}:${String(minutes % 60).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}` : `${String(minutes).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+  if (hours >= 24) return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+  return hours ? `${hours}h${minutes % 60 ? ` ${minutes % 60}min` : ''}` : `${minutes}min`;
 }
 
 export function applyRetention(env: Environment, retention: Retention, now: number): Environment {
