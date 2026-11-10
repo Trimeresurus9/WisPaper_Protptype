@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 import {transform} from 'esbuild';
 const source = await readFile(new URL('../../src/components/sandbox/environment.ts', import.meta.url), 'utf8');
 const {code} = await transform(source, {loader:'ts', format:'esm'});
-const {createEnvironment, advanceEnvironment, applyRetention, setExecuting, finishPreparation, recycleAt, runtime} = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+const {createEnvironment, advanceEnvironment, applyRetention, setExecuting, finishPreparation, recycleAt, runtime, formatDuration} = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 test('idle sleeps at 60 seconds, then recycles after 10 minutes', () => {
   const env = createEnvironment(0);
   assert.equal(advanceEnvironment(env,59999).status,'running');
@@ -53,4 +53,12 @@ test('recreation resets environment age but retains task runtime and policy', ()
 test('explicit shortening ends the environment now without reversing its age', () => {
   const asleep = advanceEnvironment({...createEnvironment(0),retention:60},31*60000);
   assert.equal(applyRetention(asleep,20,31*60000).endedAt,31*60000);
+});
+
+test('duration labels omit seconds and use compact minute/hour units', () => {
+  assert.equal(formatDuration(0), '0min');
+  assert.equal(formatDuration(59999), '<1min');
+  assert.equal(formatDuration(60000), '1min');
+  assert.equal(formatDuration(609999), '10min');
+  assert.equal(formatDuration(3660000), '1h 1min');
 });
