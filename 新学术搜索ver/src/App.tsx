@@ -10,7 +10,7 @@ import { MyLibrary } from "./components/MyLibrary";
 import { ScholarSearchHome, extractAcademicIdentifiers, type AcademicIdentifier } from "./components/ScholarSearchHome";
 import { ExplorePage } from "./components/ExplorePage";
 import { WorkspaceHome } from "./components/WorkspaceHome";
-import { HOME_SESSION_KEY, readHomeSession, type HomeTaskId } from "./components/home-task-config";
+import { readHomeSession } from "./components/home-task-config";
 import { AskAIProvider } from "./components/ask-ai/AskAI";
 import { useOnboarding } from "./components/onboarding/useOnboarding";
 import { BillingProvider } from "./contexts/BillingContext";
@@ -45,7 +45,7 @@ import { mockTheses } from "./data/mockTheses";
 import { Paper, FilterOptions } from "./types";
 
 const viewRoutes: Record<string, string> = {
-  'workspace-home': '/',
+  'workspace-home': '/app/home',
   'home-search-preview': '/app/home/search',
   'home-agent-preview': '/app/home/agent',
   'home-agent-case': '/app/home/case',
@@ -53,7 +53,7 @@ const viewRoutes: Record<string, string> = {
   explore: '/app/explore',
   list: '/app/search',
   'scholar-qa': '/app/ask',
-  'academic-agent': '/app/agent',
+  'academic-agent': '/',
   library: '/app/library',
   'research-projects': '/app/projects',
   'research-canvas': '/app/research-canvas',
@@ -74,7 +74,8 @@ const viewRoutes: Record<string, string> = {
 };
 
 const getViewFromPath = (pathname: string) => {
-  if (pathname === '/' || pathname === '/app/home') return 'workspace-home';
+  if (pathname === '/') return 'academic-agent';
+  if (pathname === '/app/home') return 'workspace-home';
   if (pathname === '/app/agent' || /^\/app\/agent\/[0-9a-f-]+\/?$/i.test(pathname)) return 'academic-agent';
   if (pathname === '/landing') return 'home';
   if (pathname === '/app/explore' || pathname === '/app/ai-feeds') return 'explore';
@@ -135,7 +136,7 @@ export default function App() {
   const [filters, setFilters] = useState<FilterOptions>(defaultFilters);
   const [selectedPaper, setSelectedPaper] =
     useState<Paper | null>(null);
-  const initialView = typeof window !== 'undefined' ? getViewFromPath(window.location.pathname) : 'workspace-home';
+  const initialView = typeof window !== 'undefined' ? getViewFromPath(window.location.pathname) : 'academic-agent';
   const embeddedAgent = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('embedded') === '1';
   const [viewMode, setViewMode] = useState<
     "home" | "workspace-home" | "home-search-preview" | "home-agent-preview" | "home-agent-case" | "explore" | "list" | "quick-paper" | "detail" | "reader" | "library" | "scholar-qa" | "all-feeds" | "paper-reproduction" | "idea-discovery" | "fudan-collection-search" | "academic-agent" | "research-projects" | "research-canvas" | "truecite" | "tools" | "figure-to-pptx" | "survey" | "figure-to-excel" | "excel-to-figure" | "institution-admin"
@@ -147,18 +148,6 @@ export default function App() {
   const [showDeepSearchTooltip, setShowDeepSearchTooltip] = useState(false);
   const [scholarQAKey, setScholarQAKey] = useState(0);
   const [agentKey, setAgentKey] = useState(0);
-  const [homeGuideOpen, setHomeGuideOpen] = useState(() => {
-    try { return localStorage.getItem('wispaper-agent-onboarding-v1') !== 'done'; } catch { return true; }
-  });
-  React.useEffect(() => {
-    const replayHomeGuide = () => {
-      try { localStorage.removeItem('wispaper-agent-onboarding-v1'); } catch { /* prototype storage */ }
-      setHomeGuideOpen(true);
-      setViewMode('workspace-home');
-    };
-    window.addEventListener('wispaper:retrigger-agent-onboarding', replayHomeGuide);
-    return () => window.removeEventListener('wispaper:retrigger-agent-onboarding', replayHomeGuide);
-  }, []);
   const [homeLoginRequest, setHomeLoginRequest] = useState(0);
   const [homeSignedIn, setHomeSignedIn] = useState(() => readHomeSession().signedIn);
   const [agentTaskActive] = useState(false);
@@ -178,8 +167,8 @@ export default function App() {
   React.useEffect(() => {
     if (window.location.pathname === '/app/ai-feeds') {
       window.history.replaceState({ view: 'explore' }, '', '/app/explore');
-    } else if (window.location.pathname === '/app/home') {
-      window.history.replaceState({ view: 'workspace-home' }, '', '/');
+    } else if (window.location.pathname === '/app/agent') {
+      window.history.replaceState({ view: 'academic-agent' }, '', '/');
     } else if (window.location.pathname === '/scholar-search' || window.location.pathname === '/app/scholar-search') {
       window.history.replaceState({ view: 'list' }, '', '/app/search');
     }
@@ -414,18 +403,6 @@ export default function App() {
     setSearchSessionId(null);
   };
 
-  const completeHomeGuide = (draft?: string, task?: string | null) => {
-    if (draft) {
-      const selected: HomeTaskId | null = task === '文献综述' || task === 'Literature Review' ? 'review'
-        : task === '灵感发现' || task === 'Idea Discovery' ? 'ideas'
-        : task === '论文评审' || task === 'Paper Review' ? 'peer-review'
-        : task === '搜索文献' || task === 'Paper Search' ? 'search' : null;
-      const session = readHomeSession();
-      try { sessionStorage.setItem(HOME_SESSION_KEY, JSON.stringify({ ...session, draft, selected })); } catch { /* prototype storage */ }
-    }
-    setHomeGuideOpen(false);
-  };
-
   const isReaderView = isHomeFlow || viewMode === "explore" || viewMode === "list" || viewMode === "detail" || viewMode === "reader" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "survey";
 
   return (
@@ -457,9 +434,7 @@ export default function App() {
               onOpenRecharge={() => setShowRechargeModal(true)}
               onStartSearch={handleStartSearchFromHome}
             />
-          ) : isHomeFlow ? homeGuideOpen ? (
-            <AcademicAgent onCompleteOnboarding={completeHomeGuide} onLogin={() => setShowPaywallModal(true)} onOpenSearch={handleStartSearchFromHome} onOpenProjects={() => setViewMode('research-projects')} />
-          ) : (
+          ) : isHomeFlow ? (
             <AskAIProvider view={viewMode} agentTaskActive={agentTaskActive} search={{ id: searchSessionId ?? 'home', query: searchQuery, mode: '学术搜索', count: hasSearched ? filteredPapers.length : 0 }} onboarding={onboarding} overlayRightOffset={embeddedAgent ? 0 : 360}
               onResume={() => {}} onSearch={handleStartSearchFromHome} onAgent={(query) => { setInitialAgentPrompt(query); setAgentKey((value) => value + 1); setViewMode('academic-agent'); }}>
               <WorkspaceHome
@@ -634,7 +609,7 @@ export default function App() {
             <QuickPaperPage
               paper={selectedPaper}
               onBack={() => setViewMode("explore")}
-              onWorkspace={() => setViewMode('workspace-home')}
+              onWorkspace={() => setViewMode('academic-agent')}
               onOpenReader={() => setViewMode("detail")}
             />
           ) : viewMode === "paper-reproduction" ? (

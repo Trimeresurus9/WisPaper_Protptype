@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import inspirationDiscoveryImage from "../assets/agent-cases/inspiration-discovery.jpg";
-import literatureReviewImage from "../assets/agent-cases/literature-review.jpg";
-import paperReproductionImage from "../assets/agent-cases/paper-reproduction.jpg";
+import "./agent-case-preview.css";
+import "./agent-launch-cases.css";
 import {
   ArrowUp,
   ArrowUpRight,
@@ -384,12 +383,6 @@ const quickTaskCaseStudies: Record<string, AgentCaseStudy[]> = {
   ],
 };
 
-const quickTaskCaseImages: Record<string, string> = {
-  灵感发现: inspirationDiscoveryImage,
-  论文复现: paperReproductionImage,
-  文献综述: literatureReviewImage,
-};
-
 const moreTools = [
   { label: "配置 GPU", icon: Cpu },
   { label: "论文主图", icon: Image },
@@ -752,6 +745,44 @@ function AgentLoginComposer({ isZh, onLogin }: { isZh: boolean; onLogin: () => v
     <textarea readOnly value="" aria-label={isZh ? "登录后继续对话" : "Sign in to continue the conversation"} placeholder={isZh ? "登录后继续向 Agent 提问…" : "Sign in to ask the Agent a follow-up…"} className="h-16 w-full resize-none bg-transparent px-2 py-1.5 text-[15px] leading-6 text-slate-900 outline-none placeholder:text-slate-400" />
     <div className="flex items-center justify-between gap-3"><span className="text-xs text-slate-400">{isZh ? "登录后可继续对话" : "Continue the conversation after signing in"}</span><button type="button" onClick={onLogin} className="rounded-full bg-[#3ea3ff] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2485df]">{isZh ? "登录" : "Sign In"}</button></div>
   </div>;
+}
+
+function AgentLaunchCaseArtwork({ title, task, index, isZh }: { title: string; task: string; index: number; isZh: boolean }) {
+  const colors = [
+    { bg: "#edf2fa", ink: "#385c95", soft: "#dbe7fa", line: "#aac0df" },
+    { bg: "#edf3f0", ink: "#3d6b62", soft: "#d8e9e1", line: "#acc9bd" },
+    { bg: "#f7f2e9", ink: "#927243", soft: "#ede0c7", line: "#d5bf99" },
+  ][index % 3];
+  const heading = title.length > (isZh ? 15 : 29) ? `${title.slice(0, isZh ? 14 : 28)}…` : title;
+  const isSearch = task === "搜索文献";
+  const isReview = task === "文献综述";
+  const isPeerReview = task === "论文评审";
+  const eyebrow = isSearch ? "PAPER SEARCH" : isReview ? "LITERATURE REVIEW" : isPeerReview ? "PEER REVIEW" : "RESEARCH IDEAS";
+  const steps = isSearch
+    ? (isZh ? ["相关论文", "方法脉络", "研究线索"] : ["Papers", "Methods", "Insights"])
+    : isReview
+      ? (isZh ? ["研究问题", "方法分类", "证据对照"] : ["Questions", "Taxonomy", "Evidence"])
+      : isPeerReview
+        ? (isZh ? ["研究贡献", "实验设计", "修改建议"] : ["Contribution", "Evidence", "Revisions"])
+        : (isZh ? ["发现问题", "形成假设", "设计验证"] : ["Discover", "Hypothesize", "Validate"]);
+  return <svg viewBox="0 0 600 360" className="case-artwork" aria-hidden="true" focusable="false">
+    <rect width="600" height="360" fill={colors.bg} />
+    <text x="30" y="37" fill={colors.ink} fontSize="12" letterSpacing="2" opacity=".75">WISPAPER / {eyebrow}</text>
+    <path d="M30 53h540" stroke={colors.line} strokeWidth="1" />
+    {isSearch ? <>
+      <g className="case-art-back"><rect x="75" y="83" width="435" height="236" rx="13" fill="#fff" stroke={colors.soft} /><rect x="101" y="103" width="375" height="35" rx="8" fill={colors.bg} /><circle cx="125" cy="120" r="8" fill="none" stroke={colors.ink} strokeWidth="3" /><path d="m131 126 9 9" stroke={colors.ink} strokeWidth="3" strokeLinecap="round" /><text x="153" y="126" fill={colors.ink} fontSize="16">{heading}</text></g>
+      <g className="case-art-front">{steps.map((step, stepIndex) => <g key={step}><rect x={112 + stepIndex * 10} y={159 + stepIndex * 50} width={354 - stepIndex * 20} height="42" rx="8" fill={stepIndex === 0 ? colors.soft : "#f7f9fc"} /><circle cx={133 + stepIndex * 10} cy={180 + stepIndex * 50} r="6" fill={colors.ink} opacity={1 - stepIndex * .22} /><text x={150 + stepIndex * 10} y={185 + stepIndex * 50} fill="#53677b" fontSize="15">{step}</text><path d={`M${310 + stepIndex * 10} ${180 + stepIndex * 50}h110`} stroke={colors.line} strokeWidth="5" strokeLinecap="round" /></g>)}</g>
+      <g className="case-art-note"><rect x="388" y="286" width="150" height="39" rx="8" fill={colors.ink} /><text x="463" y="311" textAnchor="middle" fill="#fff" fontSize="13">{isZh ? "证据已整理" : "Evidence ready"}</text></g>
+    </> : isPeerReview ? <>
+      <g className="case-art-back" transform="rotate(-4 240 190)"><rect x="78" y="73" width="304" height="256" rx="9" fill="#fff" stroke={colors.soft} /><text x="104" y="105" fill={colors.ink} fontSize="11" letterSpacing="1.5">RESEARCH MANUSCRIPT</text><text x="104" y="142" fill="#344253" fontSize="17">{heading}</text>{[0, 1, 2, 3, 4].map((line) => <path key={line} d={`M104 ${170 + line * 27}h${line % 2 ? 188 : 242}`} stroke="#e9edf2" strokeWidth="6" strokeLinecap="round" />)}<path d="M104 224h216" stroke={colors.soft} strokeWidth="16" /></g>
+      <g className="case-art-front">{steps.slice(0, 2).map((step, stepIndex) => <g key={step}><rect x="352" y={128 + stepIndex * 111} width="185" height="76" rx="11" fill="#fff" stroke={colors.line} /><circle cx="378" cy={153 + stepIndex * 111} r="11" fill={colors.soft} /><text x="378" y={158 + stepIndex * 111} textAnchor="middle" fill={colors.ink} fontSize="13">{stepIndex + 1}</text><text x="400" y={159 + stepIndex * 111} fill={colors.ink} fontSize="15">{step}</text><path d={`M375 ${181 + stepIndex * 111}h135`} stroke="#e9edf2" strokeWidth="5" strokeLinecap="round" /></g>)}</g>
+    </> : <>
+      <g className="case-art-back"><rect x="73" y="88" width="174" height="78" rx="12" fill="#fff" stroke={colors.soft} /><circle cx="96" cy="112" r="6" fill={colors.line} /><text x="111" y="119" fill={colors.ink} fontSize="17">{steps[0]}</text><path d="M96 142h112" stroke={colors.soft} strokeWidth="5" strokeLinecap="round" /><rect x="360" y="88" width="174" height="78" rx="12" fill="#fff" stroke={colors.soft} /><circle cx="383" cy="112" r="6" fill={colors.line} /><text x="398" y="119" fill={colors.ink} fontSize="17">{steps[1]}</text><path d="M383 142h112" stroke={colors.soft} strokeWidth="5" strokeLinecap="round" /></g>
+      <path d="M300 190C260 137 231 133 211 133M300 190C340 137 369 133 389 133M300 190v76" fill="none" stroke={colors.line} strokeWidth="2" />
+      <g className="case-art-front"><rect x="165" y="173" width="270" height="87" rx="15" fill={colors.ink} /><text x="300" y="198" textAnchor="middle" fill="#fff" opacity=".68" fontSize="11" letterSpacing="2">{isReview ? "SURVEY FRAMEWORK" : "RESEARCH QUESTION"}</text><text x="300" y="230" textAnchor="middle" fill="#fff" fontSize="19" fontWeight="600">{heading}</text></g>
+      <g className="case-art-note"><rect x="218" y="281" width="165" height="43" rx="9" fill="#fff" stroke={colors.soft} /><text x="300" y="308" textAnchor="middle" fill={colors.ink} fontSize="16">↗ {steps[2]}</text></g>
+    </>}
+  </svg>;
 }
 
 function GpuConfigPanel() {
@@ -1460,7 +1491,7 @@ function WorkbenchPanel({
   );
 }
 
-export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPrompt = "", onCompleteOnboarding }: { onOpenProjects: () => void; onOpenSearch: (query: string) => void; onLogin: () => void; initialPrompt?: string; onCompleteOnboarding?: (draft?: string, task?: string | null) => void }) {
+export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPrompt = "" }: { onOpenProjects: () => void; onOpenSearch: (query: string) => void; onLogin: () => void; initialPrompt?: string }) {
   const { language } = useLanguage();
   const { isAuthenticated, setAuthenticated } = usePrototypeAuth();
   const isZh = language === "zh";
@@ -1537,13 +1568,10 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
   const taskNeedsAttention = planAccepted && todos.some((todo) => todo.status === "waiting" || todo.status === "blocked" || todo.status === "failed");
   const activeCaseStudies = quickTaskCaseStudies[activeCaseTab] ?? [];
   const activeCaseTask = quickTasks.find((task) => task.title === activeCaseTab) ?? quickTasks[0];
-  const activeCaseImage = quickTaskCaseImages[activeCaseTab] ?? inspirationDiscoveryImage;
   const selectedShortcut = launchShortcuts.find((shortcut) => shortcut.title === activeLaunchShortcut);
   const visibleCases: AgentCaseStudy[] = selectedShortcut
     ? selectedShortcut.samples.map((sample) => ({ ...sample, field: selectedShortcut.title, outcome: sample.prompt }))
     : activeCaseStudies;
-  const visibleCaseImage = selectedShortcut ? quickTaskCaseImages[selectedShortcut.title] ?? activeCaseImage : activeCaseImage;
-  const visibleCaseIcon = selectedShortcut?.icon ?? activeCaseTask.icon;
 
   useEffect(() => () => caseFillTimersRef.current.forEach(window.clearTimeout), []);
   useEffect(() => {
@@ -1669,18 +1697,15 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
         setInputFlight(null);
         setLandingPhase("revealing");
         window.setTimeout(() => setLandingPhase("idle"), 700);
-        onCompleteOnboarding?.(value, task);
       }, 780);
     } else {
       setPrompt(value);
-      onCompleteOnboarding?.(value, task);
     }
     setOnboardingOpen(false);
   };
   const closeOnboarding = () => {
     try { window.localStorage.setItem("wispaper-agent-onboarding-v1", "done"); } catch { /* prototype storage */ }
     setOnboardingOpen(false);
-    onCompleteOnboarding?.();
   };
 
   useEffect(() => {
@@ -1948,52 +1973,34 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
               </div>
             </div>
 
-            <section className="mx-auto mt-16 max-w-3xl" aria-label={isZh ? "案例" : "Cases"}>
+            <section className="agent-launch-case-section mx-auto mt-16 max-w-3xl" aria-label={isZh ? "案例" : "Cases"}>
               <div
                 id={`agent-case-panel-${activeCaseTab}`}
                 role="tabpanel"
               >
                 <h2 className="text-sm font-semibold text-slate-900">{isZh ? "案例" : "Cases"}</h2>
-                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                <div className="agent-launch-case-grid mt-3">
                   {visibleCases.map((item, index) => {
-                    const StudyIcon = visibleCaseIcon;
                     const englishItem = selectedShortcut
                       ? { title: launchShortcutEnglish[selectedShortcut.title]?.samples[index]?.title ?? item.title, field: launchShortcutEnglish[selectedShortcut.title]?.title ?? item.field, summary: launchShortcutEnglish[selectedShortcut.title]?.samples[index]?.prompt ?? item.summary, outcome: launchShortcutEnglish[selectedShortcut.title]?.samples[index]?.prompt ?? item.outcome, prompt: launchShortcutEnglish[selectedShortcut.title]?.samples[index]?.prompt ?? item.prompt }
                       : defaultCaseStudyEnglish[index];
+                    const title = isZh ? item.title : englishItem?.title ?? item.title;
+                    const field = isZh ? item.field : englishItem?.field ?? item.field;
+                    const summary = isZh ? item.summary : englishItem?.summary ?? item.summary;
+                    const outcome = isZh ? item.outcome : englishItem?.outcome ?? item.outcome;
+                    const casePrompt = isZh ? item.prompt : englishItem?.prompt ?? item.prompt;
+                    const skill = selectedShortcut?.title ?? activeCaseTask.title;
                     return (
                       <button
                         key={item.title}
                         type="button"
-                        onClick={() => playCase(isZh ? item.title : englishItem?.title ?? item.title, isZh ? item.prompt : englishItem?.prompt ?? item.prompt, isZh ? item.summary : englishItem?.summary ?? item.summary, isZh ? item.outcome : englishItem?.outcome ?? item.outcome, selectedShortcut?.title ?? activeCaseTask.title)}
-                        className="group flex min-h-[410px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-left transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_22px_55px_-30px_rgba(15,23,42,0.4)] active:translate-y-0"
+                        onClick={() => playCase(title, casePrompt, summary, outcome, skill)}
+                        className="wh-visual-case"
+                        style={{ '--case-order': index } as React.CSSProperties}
+                        aria-label={`${isZh ? '播放案例回放' : 'Replay case'}：${title}`}
                       >
-                        <div className="relative h-40 overflow-hidden bg-slate-100">
-                          <img
-                            src={visibleCaseImage}
-                            alt=""
-                            className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-                            style={{ objectPosition: index === 0 ? "left center" : index === 2 ? "right center" : "center" }}
-                          />
-                          <span className="absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-slate-950/90 text-white shadow-sm backdrop-blur">
-                            <StudyIcon className="h-4 w-4" />
-                          </span>
-                          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-xs tabular-nums text-slate-600 shadow-sm backdrop-blur">
-                            <GraduationCap className="h-3.5 w-3.5" />
-                            {item.credits}
-                          </span>
-                        </div>
-                        <div className="px-4 pb-3 pt-4">
-                          <span className="inline-flex rounded-full bg-[#3ea3ff]/10 px-2.5 py-1 text-[11px] font-medium text-[#2485df]">
-                            {isZh ? item.field : englishItem?.field ?? item.field}
-                          </span>
-                        </div>
-                        <div className="flex-1 px-4 pb-4">
-                          <h3 className="text-base font-semibold leading-6 text-slate-900">{isZh ? item.title : englishItem?.title ?? item.title}</h3>
-                          <p className="mt-3 text-xs leading-5 text-slate-500">{isZh ? item.summary : englishItem?.summary ?? item.summary}</p>
-                        </div>
-                        <div className="border-t border-slate-100 bg-slate-50/80 px-4 py-3">
-                          <p className="flex items-center justify-between gap-2 text-xs font-medium leading-5 text-slate-600"><span className="line-clamp-2">{isZh ? item.outcome : englishItem?.outcome ?? item.outcome}</span><span className="shrink-0 text-[#3ea3ff]">{isZh ? "播放回放" : "Replay"} <ArrowUpRight className="inline h-3.5 w-3.5" /></span></p>
-                        </div>
+                        <span className="wh-case-visual"><span className="wh-case-art"><AgentLaunchCaseArtwork title={title} task={skill} index={index} isZh={isZh} /></span><span className="wh-case-preview-action">{isZh ? '播放回放' : 'Replay'}<ArrowUpRight size={14} /></span></span>
+                        <span className="wh-case-caption"><span><strong>{title}</strong><small>{field} · {item.credits}</small></span><span className="wh-case-open"><ArrowUpRight size={18} /></span></span>
                       </button>
                     );
                   })}
