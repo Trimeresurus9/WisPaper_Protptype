@@ -1622,6 +1622,12 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
   const [landingPhase, setLandingPhase] = useState<"idle" | "waiting" | "revealing">("idle");
   const [homeGuidePending, setHomeGuidePending] = useState(false);
   const [homeGuideStep, setHomeGuideStep] = useState<0 | 1 | 2 | 3>(0);
+  const [guideStepMs, setGuideStepMs] = useState(() => {
+    try {
+      const saved = Number(window.localStorage.getItem("wispaper-mock-onboarding-guide-step-ms"));
+      return [500, 1000, 1500, 2000].includes(saved) ? saved : 1000;
+    } catch { return 1000; }
+  });
   const [guideSubmitting, setGuideSubmitting] = useState(false);
   const guideBubbleRef = useRef<HTMLDivElement>(null);
   const guideInputRef = useRef<HTMLTextAreaElement>(null);
@@ -1948,13 +1954,22 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
   }, [homeGuidePending, onboardingOpen, landingPhase, started]);
 
   useEffect(() => {
+    const handleDuration = (event: Event) => {
+      const ms = (event as CustomEvent<{ ms: number }>).detail?.ms;
+      if (typeof ms === "number" && [500, 1000, 1500, 2000].includes(ms)) setGuideStepMs(ms);
+    };
+    window.addEventListener("wispaper:mock-onboarding-guide-duration", handleDuration);
+    return () => window.removeEventListener("wispaper:mock-onboarding-guide-duration", handleDuration);
+  }, []);
+
+  useEffect(() => {
     if (!homeGuideStep) return;
     const timer = window.setTimeout(() => {
       if (homeGuideStep < 3) setHomeGuideStep((homeGuideStep + 1) as 2 | 3);
       else { setHomeGuideStep(0); setGuideSubmitting(true); }
-    }, 500);
+    }, guideStepMs);
     return () => window.clearTimeout(timer);
-  }, [homeGuideStep]);
+  }, [homeGuideStep, guideStepMs]);
 
   useEffect(() => {
     if (!guideSubmitting || started) return;

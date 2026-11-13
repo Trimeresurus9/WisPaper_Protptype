@@ -746,6 +746,13 @@ export default function App() {
 
         {!embeddedAgent && <MockConsole
           currentView={viewMode}
+          onReplayAgentOnboarding={() => {
+            try { window.localStorage.removeItem('wispaper-agent-onboarding-v1'); } catch {}
+            window.history.pushState({ view: 'academic-agent' }, '', '/');
+            setInitialAgentPrompt('');
+            setAgentKey((value) => value + 1);
+            setViewMode('academic-agent');
+          }}
           onOpenBilling={() => setShowPaywallModal(true)}
           userCredits={mockUserCredits}
           onUserCreditsChange={setMockUserCredits}
