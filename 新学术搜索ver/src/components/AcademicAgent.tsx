@@ -654,15 +654,15 @@ function AgentComposer({
 
       <div
         className={`rounded-[22px] border border-slate-200 bg-white text-left shadow-[0_18px_55px_-30px_rgba(15,23,42,0.38)] transition focus-within:border-slate-300 focus-within:shadow-[0_22px_65px_-28px_rgba(15,23,42,0.44)] ${
-          compact ? "p-2.5" : "p-3.5"
+          compact ? "p-2.5" : "p-2.5 sm:p-3.5"
         }`}
       >
-        <div className="flex items-start gap-2 px-2">
+        <div className="flex flex-col items-start gap-1 px-1 sm:flex-row sm:gap-2 sm:px-2">
           {selectedSkill && (
             <button
               type="button"
               onClick={onClearSkill}
-              className="group mt-1.5 inline-flex h-9 shrink-0 items-center gap-2 rounded-xl bg-slate-100 px-3 text-sm font-medium text-slate-800 transition hover:bg-slate-200"
+              className="group inline-flex h-8 shrink-0 items-center gap-2 rounded-xl bg-slate-100 px-2.5 text-xs font-medium text-slate-800 transition hover:bg-slate-200 sm:mt-1.5 sm:h-9 sm:px-3 sm:text-sm"
               aria-label={`移除 ${selectedSkill} Skill`}
               title="点击移除 Skill"
             >
@@ -682,13 +682,13 @@ function AgentComposer({
               }
             }}
             placeholder={placeholderOverride ?? (language === "zh" ? "描述你的研究目标，或输入 / 选择工具" : "Describe your research goal, or type / to choose tools")}
-            className={`min-w-0 flex-1 resize-none bg-transparent text-[15px] leading-6 text-slate-900 outline-none placeholder:text-slate-400 ${
-              compact ? "h-16 py-1.5" : "h-28 py-2"
+            className={`min-w-0 w-full resize-none bg-transparent text-[15px] leading-6 text-slate-900 outline-none placeholder:text-slate-400 sm:flex-1 ${
+              compact ? "h-16 py-1.5" : "h-20 py-2 sm:h-28"
             }`}
           />
         </div>
-        <div className="flex items-end justify-between gap-3">
-          {!onboardingMode && <div className="flex min-w-0 max-w-full flex-1 translate-y-0 flex-wrap items-center gap-2 opacity-100 transition-all duration-300">
+        <div className="flex items-end justify-between gap-2 sm:gap-3">
+          {!onboardingMode && <div className="flex min-w-0 max-w-full flex-1 translate-y-0 flex-nowrap items-center gap-1.5 opacity-100 transition-all duration-300 sm:flex-wrap sm:gap-2">
             <button
               type="button"
               onClick={() => {
@@ -708,14 +708,14 @@ function AgentComposer({
             {usesLaunchOptions ? (
               <>
                 <div className="relative">
-                  <button type="button" onClick={() => { setShowShortcutModels((value) => !value); setShowProjects(false); }} className="flex h-9 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">
+                  <button type="button" onClick={() => { setShowShortcutModels((value) => !value); setShowProjects(false); }} className="flex h-9 items-center gap-1 rounded-full border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 sm:gap-2 sm:px-3">
                     {shortcutModel} <span className="text-slate-400">{shortcutModel === "Lite" ? "×0.36" : "×3.6"}</span><ChevronDown className="h-3.5 w-3.5" />
                   </button>
                   {showShortcutModels && <div className="absolute bottom-11 left-0 z-40 w-36 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">{(["Lite", "Pro"] as const).map((model) => <button key={model} type="button" onClick={() => { onShortcutModelChange(model); setShowShortcutModels(false); }} className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs ${shortcutModel === model ? "bg-blue-50 font-semibold text-blue-700" : "text-slate-600 hover:bg-slate-50"}`}><span>{model}</span><span>{model === "Lite" ? "×0.36" : "×3.6"}</span></button>)}</div>}
                 </div>
                 <div className="relative min-w-0">
-                  <button type="button" onClick={() => { setShowProjects((value) => !value); setShowShortcutModels(false); }} className="flex h-9 max-w-48 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"><FolderKanban className="h-4 w-4 text-slate-500" /><span className="truncate">{selectedProject}</span><ChevronDown className="h-3.5 w-3.5 shrink-0" /></button>
-                  {showProjects && <div className="absolute bottom-11 left-0 z-40 w-64 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">{projectOptions.map((project) => <button key={project} type="button" onClick={() => { setSelectedProject(project); setShowProjects(false); }} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs ${selectedProject === project ? "bg-blue-50 font-semibold text-blue-700" : "text-slate-600 hover:bg-slate-50"}`}><FolderKanban className="h-3.5 w-3.5" /><span className="truncate">{project}</span></button>)}</div>}
+                  <button type="button" onClick={() => { setShowProjects((value) => !value); setShowShortcutModels(false); }} className="flex h-9 w-10 items-center justify-center gap-1 rounded-full border border-slate-200 bg-white text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 sm:w-auto sm:max-w-48 sm:gap-2 sm:px-3" aria-label={selectedProject} title={selectedProject}><FolderKanban className="h-4 w-4 shrink-0 text-slate-500" /><span className="hidden truncate sm:inline">{selectedProject}</span><ChevronDown className="hidden h-3.5 w-3.5 shrink-0 sm:block" /></button>
+                  {showProjects && <div className="absolute bottom-11 right-0 z-40 w-56 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl sm:left-0 sm:right-auto sm:w-64">{projectOptions.map((project) => <button key={project} type="button" onClick={() => { setSelectedProject(project); setShowProjects(false); }} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs ${selectedProject === project ? "bg-blue-50 font-semibold text-blue-700" : "text-slate-600 hover:bg-slate-50"}`}><FolderKanban className="h-3.5 w-3.5" /><span className="truncate">{project}</span></button>)}</div>}
                 </div>
               </>
             ) : <button
@@ -754,9 +754,9 @@ function AgentComposer({
 }
 
 function AgentLoginPrompt({ isZh, mode, onLogin, onComplete }: { isZh: boolean; mode: "inline" | "redirect"; onLogin: () => void; onComplete: () => void }) {
-  return <div className="w-full rounded-[22px] border border-[#3ea3ff]/30 bg-[#3ea3ff]/5 px-5 py-4 shadow-[0_18px_55px_-30px_rgba(15,23,42,0.38)]">
-    <div className="flex items-center justify-between gap-4"><div className="flex min-w-0 items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#3ea3ff]/15 text-[#2485df]"><UserRound className="h-4 w-4" /></span><span className="text-sm leading-5 text-slate-600">{isZh ? "登录后可继续向 Agent 提问，并保存研究结果" : "Sign in to continue asking the Agent and save your research results"}</span></div>{mode === "redirect" && <button type="button" onClick={onLogin} className="shrink-0 rounded-full bg-[#3ea3ff] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2485df]">{isZh ? "前往登录" : "Go to sign in"}</button>}</div>
-    {mode === "inline" && <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-5"><div className="text-base font-semibold text-slate-900">Logto</div><p className="mt-1 text-xs text-slate-500">{isZh ? "登录 WisPaper，继续这项研究" : "Sign in to WisPaper to continue this research"}</p><LogtoMockForm isZh={isZh} onComplete={onComplete} /></div>}
+  return <div className="w-full rounded-[22px] border border-[#3ea3ff]/30 bg-[#3ea3ff]/5 px-3 py-3 shadow-[0_18px_55px_-30px_rgba(15,23,42,0.38)] sm:px-5 sm:py-4">
+    <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"><div className="flex min-w-0 items-center gap-2 sm:gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[#3ea3ff]/15 text-[#2485df] sm:h-9 sm:w-9"><UserRound className="h-4 w-4" /></span><span className="text-xs leading-5 text-slate-600 sm:text-sm">{isZh ? "登录后可继续向 Agent 提问，并保存研究结果" : "Sign in to continue asking the Agent and save your research results"}</span></div>{mode === "redirect" && <button type="button" onClick={onLogin} className="self-end rounded-full bg-[#3ea3ff] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#2485df] sm:shrink-0 sm:px-4 sm:py-2 sm:text-sm">{isZh ? "前往登录" : "Go to sign in"}</button>}</div>
+    {mode === "inline" && <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3 sm:mt-4 sm:p-5"><div className="text-base font-semibold text-slate-900">Logto</div><p className="mt-1 text-xs text-slate-500">{isZh ? "登录 WisPaper，继续这项研究" : "Sign in to WisPaper to continue this research"}</p><LogtoMockForm isZh={isZh} onComplete={onComplete} /></div>}
   </div>;
 }
 
@@ -772,9 +772,9 @@ function AgentLoginComposer({ isZh, onLogin }: { isZh: boolean; onLogin: () => v
 }
 
 function AgentCreditGateCard({ kind, credits, isZh, onUpgrade, onSearch, onUseLite }: { kind: "agent" | "pro"; credits: number; isZh: boolean; onUpgrade: () => void; onSearch: () => void; onUseLite: () => void }) {
-  return <div className="rounded-[20px] border border-amber-200 bg-amber-50/70 p-5 shadow-sm" role="status">
+  return <div className="rounded-[20px] border border-amber-200 bg-amber-50/70 p-3 shadow-sm sm:p-5" role="status">
     <div className="flex items-start gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-700"><CircleGauge className="h-5 w-5" /></span><div><h3 className="text-sm font-semibold text-slate-900">{kind === "agent" ? (isZh ? "当前积分不足以启动 Agent" : "Not enough credits to start an Agent") : (isZh ? "当前积分不足以使用 Pro Agent" : "Not enough credits for Pro Agent")}</h3><p className="mt-1 text-xs leading-5 text-slate-600">{kind === "agent" ? (isZh ? `当前有 ${credits.toLocaleString()} 积分；启动 Agent 至少需要 2,000 积分。你可以升级，或先搜索文献。` : `You have ${credits.toLocaleString()} credits. Starting an Agent requires at least 2,000. Upgrade or search papers first.`) : (isZh ? `当前有 ${credits.toLocaleString()} 积分；Pro Agent 至少需要 40,000 积分。你可以升级，或切换 Lite 继续。` : `You have ${credits.toLocaleString()} credits. Pro Agent requires at least 40,000. Upgrade or continue with Lite.`)}</p></div></div>
-    <div className="mt-4 flex flex-wrap gap-2 pl-12"><button type="button" onClick={onUpgrade} className="rounded-lg bg-[#3ea3ff] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#2485df]">{isZh ? "升级套餐" : "Upgrade"}</button><button type="button" onClick={kind === "agent" ? onSearch : onUseLite} className="rounded-lg border border-amber-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-amber-50">{kind === "agent" ? (isZh ? "搜索文献" : "Search papers") : (isZh ? "使用 Lite" : "Use Lite")}</button></div>
+    <div className="mt-3 flex flex-wrap gap-2 sm:mt-4 sm:pl-12"><button type="button" onClick={onUpgrade} className="rounded-lg bg-[#3ea3ff] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#2485df]">{isZh ? "升级套餐" : "Upgrade"}</button><button type="button" onClick={kind === "agent" ? onSearch : onUseLite} className="rounded-lg border border-amber-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-amber-50">{kind === "agent" ? (isZh ? "搜索文献" : "Search papers") : (isZh ? "使用 Lite" : "Use Lite")}</button></div>
   </div>;
 }
 
@@ -2168,14 +2168,14 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
                 <span>{homeGuideStep === 1 ? (isZh ? "先选择任务" : "First, choose a task") : homeGuideStep === 2 ? (isZh ? "再补充具体要求" : "Then, add your requirements") : (isZh ? "即将提交任务" : "Submitting the task next")}</span>
                 <button type="button" onClick={() => { setHomeGuideStep(0); setGuideSubmitting(false); }} className="shrink-0 text-xs text-slate-400 hover:text-blue-600">{isZh ? "跳过" : "Skip"}</button>
               </div>}
-              <div ref={guideShortcutsRef} className="mt-5 flex flex-wrap justify-center gap-2 sm:gap-2.5" aria-label={isZh ? "任务快捷方式" : "Task shortcuts"}>
+              <div ref={guideShortcutsRef} className="agent-launch-shortcuts mt-5 flex w-full flex-nowrap items-center justify-start gap-2 overflow-x-auto pb-1 whitespace-nowrap sm:flex-wrap sm:justify-center sm:gap-2.5 sm:overflow-visible sm:pb-0" aria-label={isZh ? "任务快捷方式" : "Task shortcuts"}>
                 {launchShortcuts.map((shortcut) => {
                   const Icon = shortcut.icon;
                   const active = activeLaunchShortcut === shortcut.title;
                   return <button key={shortcut.title} type="button" onClick={() => {
                     setActiveLaunchShortcut(active ? null : shortcut.title);
                     setSelectedSkill(active ? null : shortcut.title);
-                  }} className={`inline-flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-medium shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${active ? "border-[#3ea3ff] bg-[#3ea3ff]/10 text-[#2485df]" : "border-slate-200 bg-white text-slate-600 hover:border-[#3ea3ff] hover:text-slate-950"}`}><Icon className="h-4 w-4 text-[#3ea3ff]" />{isZh ? shortcut.title : launchShortcutEnglish[shortcut.title]?.title ?? shortcut.title}</button>;
+                  }} className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:px-4 sm:py-2.5 sm:text-sm ${active ? "border-[#3ea3ff] bg-[#3ea3ff]/10 text-[#2485df]" : "border-slate-200 bg-white text-slate-600 hover:border-[#3ea3ff] hover:text-slate-950"}`}><Icon className="h-4 w-4 text-[#3ea3ff]" />{isZh ? shortcut.title : launchShortcutEnglish[shortcut.title]?.title ?? shortcut.title}</button>;
                 })}
               </div>
             </div>
@@ -2225,7 +2225,7 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
   return (
     <div className="flex h-screen min-w-0 flex-1 bg-[#f7f9fc] text-slate-950">
       <main className="flex min-w-0 flex-1 flex-col bg-white">
-        <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-100 px-6">
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-100 px-3 sm:h-16 sm:px-6">
           <h1 className="min-w-0 truncate pr-6 text-[15px] font-semibold">{taskTitle}</h1>
           <div className="flex shrink-0 items-center gap-2 text-xs text-slate-500">
             {caseReplay && <span className="rounded-lg bg-[#3ea3ff]/10 px-2.5 py-1.5 font-semibold text-[#2485df]">{isZh ? "案例回放" : "Case replay"}</span>}
@@ -2253,12 +2253,12 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
         </header>
 
         <section className="relative flex min-h-0 flex-1 flex-col">
-          <div className="flex-1 overflow-y-auto px-5 pb-48 pt-9">
-            <div className="mx-auto max-w-3xl space-y-7">
+          <div className="flex-1 overflow-y-auto px-3 pb-56 pt-5 sm:px-5 sm:pb-48 sm:pt-9">
+            <div className="mx-auto max-w-3xl space-y-4 sm:space-y-7">
               {messages.map((message, index) => (
                 <article key={index} className={message.role === "user" ? "flex justify-end" : ""}>
                   {message.role === "user" ? (
-                    <div className="max-w-[78%] rounded-[18px] rounded-tr-md bg-[#e6f1ff] px-4 py-3 text-sm leading-6 text-slate-800">
+                    <div className="max-w-[90%] rounded-[18px] rounded-tr-md bg-[#e6f1ff] px-3 py-2.5 text-sm leading-6 text-slate-800 sm:max-w-[78%] sm:px-4 sm:py-3">
                       {message.text}
                     </div>
                   ) : (
@@ -2272,25 +2272,25 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
                           {caseReplay?.model ?? activeTaskModel ?? agentTiers.find((tier) => tier.id === selectedAgent)?.label}
                         </span>
                       </div>
-                      <div className={`rounded-[18px] rounded-tl-md bg-slate-50 px-5 py-4 text-[15px] leading-7 text-slate-700 ${caseReplay ? "whitespace-pre-line" : ""}`}>
+                      <div className={`rounded-[18px] rounded-tl-md bg-slate-50 px-3 py-2.5 text-sm leading-6 text-slate-700 sm:px-5 sm:py-4 sm:text-[15px] sm:leading-7 ${caseReplay ? "whitespace-pre-line" : ""}`}>
                         {message.text}
                       </div>
                       {!caseReplay && messages.slice(0, index + 1).filter((item) => item.role === "agent").length === 1 && <div className="mt-3">
                         <button
                           type="button"
                           onClick={onOpenProjects}
-                          className="group w-full rounded-2xl border border-violet-200 bg-gradient-to-br from-white to-violet-50/70 p-4 text-left transition hover:border-violet-300 hover:shadow-md"
+                          className="group w-full rounded-2xl border border-violet-200 bg-gradient-to-br from-white to-violet-50/70 p-3 text-left transition hover:border-violet-300 hover:shadow-md sm:p-4"
                         >
-                          <span className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white"><Network className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-3"><strong className="text-sm font-semibold text-slate-900">研究范围已同步到科研画布</strong><ExternalLink className="h-4 w-4 text-violet-400 transition group-hover:translate-x-0.5" /></span><span className="mt-1 block text-xs leading-5 text-slate-500">已补充“证据筛选与评测”分支，并关联向量检索基线。</span></span></span>
+                          <span className="flex items-start gap-2 sm:gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white sm:h-10 sm:w-10"><Network className="h-4 w-4 sm:h-5 sm:w-5" /></span><span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><strong className="text-xs font-semibold text-slate-900 sm:text-sm">研究范围已同步到科研画布</strong><ExternalLink className="h-4 w-4 shrink-0 text-violet-400 transition group-hover:translate-x-0.5" /></span><span className="mt-1 block text-xs leading-5 text-slate-500">已补充“证据筛选与评测”分支，并关联向量检索基线。</span></span></span>
                         </button>
                       </div>}
                       {!caseReplay && messages.slice(0, index + 1).filter((item) => item.role === "agent").length === 2 && <div className="mt-3">
                         <button
                           type="button"
                           onClick={() => { setActiveTab("note"); setPanelOpen(true); setCanvasFocusNodeId("n2"); setCanvasFocusRequest((value) => value + 1); }}
-                          className="group w-full rounded-2xl border border-blue-200 bg-gradient-to-br from-white to-blue-50/70 p-4 text-left transition hover:border-blue-300 hover:shadow-md"
+                          className="group w-full rounded-2xl border border-blue-200 bg-gradient-to-br from-white to-blue-50/70 p-3 text-left transition hover:border-blue-300 hover:shadow-md sm:p-4"
                         >
-                          <span className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white"><FileText className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-3"><strong className="text-sm font-semibold text-slate-900">实验范围笔记已写入</strong><ExternalLink className="h-4 w-4 text-blue-400 transition group-hover:translate-x-0.5" /></span><span className="mt-1 block text-xs leading-5 text-slate-500">记录 LoCoMo 数据集、BGE-M3、Top K=8 与 BM25 对照条件，待补充时间特征重排。</span></span></span>
+                          <span className="flex items-start gap-2 sm:gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white sm:h-10 sm:w-10"><FileText className="h-4 w-4 sm:h-5 sm:w-5" /></span><span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><strong className="text-xs font-semibold text-slate-900 sm:text-sm">实验范围笔记已写入</strong><ExternalLink className="h-4 w-4 shrink-0 text-blue-400 transition group-hover:translate-x-0.5" /></span><span className="mt-1 block text-xs leading-5 text-slate-500">记录 LoCoMo 数据集、BGE-M3、Top K=8 与 BM25 对照条件，待补充时间特征重排。</span></span></span>
                         </button>
                       </div>}
                     </div>
@@ -2312,7 +2312,7 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
             </div>
           </div>
 
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-white via-white to-transparent px-5 pb-3 pt-14">
+          <div className="pointer-events-none absolute inset-x-0 bottom-12 z-20 bg-gradient-to-t from-white via-white to-transparent px-3 pb-2 pt-10 sm:bottom-0 sm:px-5 sm:pb-3 sm:pt-14">
             <div className="pointer-events-auto mx-auto max-w-3xl">
               {!isAuthenticated ? <AgentLoginComposer isZh={isZh} onLogin={handleLoginIntent} /> : <AgentComposer
                 prompt={prompt}

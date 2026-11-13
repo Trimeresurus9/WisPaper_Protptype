@@ -1,4 +1,5 @@
 .agent-launch-case-section { container-type: inline-size; }
+@media (max-width: 639px) { .agent-launch-shortcuts { scrollbar-width: none; mask-image: linear-gradient(to right, #000 0%, #000 90%, transparent 100%); } .agent-launch-shortcuts::-webkit-scrollbar { display: none; } }
 .agent-launch-case-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .agent-launch-case-grid > .wh-visual-case { display: flex; flex-direction: column; min-width: 0; padding: 0; text-align: left; border: 1px solid #e6eaf0; border-radius: 14px; background: #fff; overflow: hidden; transition: transform 200ms, box-shadow 200ms, border-color 200ms; animation: case-enter 420ms both; animation-delay: calc(var(--case-order) * 65ms); }
 .agent-launch-case-grid > .wh-visual-case:hover, .agent-launch-case-grid > .wh-visual-case:focus-visible { transform: translateY(-4px); border-color: #c5d2e1; box-shadow: 0 9px 26px #34465d0e; }
