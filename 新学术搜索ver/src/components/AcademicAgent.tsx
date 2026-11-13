@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import "./agent-case-preview.css";
 import "./agent-launch-cases.css";
@@ -519,6 +519,8 @@ function AgentComposer({
   onboardingMode = false,
   placeholderOverride,
   submittingEffect = false,
+  guideInputRef,
+  guideSubmitRef,
   replayModel,
   shortcutModel,
   onShortcutModelChange,
@@ -536,6 +538,8 @@ function AgentComposer({
   onboardingMode?: boolean;
   placeholderOverride?: string;
   submittingEffect?: boolean;
+  guideInputRef?: React.Ref<HTMLTextAreaElement>;
+  guideSubmitRef?: React.Ref<HTMLButtonElement>;
   replayModel?: "Lite" | "Pro";
   shortcutModel: "Lite" | "Pro";
   onShortcutModelChange: (model: "Lite" | "Pro") => void;
@@ -668,6 +672,7 @@ function AgentComposer({
             </button>
           )}
           <textarea
+            ref={guideInputRef}
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
             onKeyDown={(event) => {
@@ -734,12 +739,13 @@ function AgentComposer({
             </button>}
           </div>}
           <button
+            ref={guideSubmitRef}
             onClick={onSubmit}
-            disabled={!prompt.trim() || disabled}
-            className={`flex h-10 w-10 items-center justify-center rounded-full bg-slate-950 text-white transition hover:bg-slate-800 active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-200 ${submittingEffect ? "scale-110 ring-4 ring-[#3ea3ff]/30" : ""}`}
-            aria-label="发送"
+            disabled={!prompt.trim() || disabled || submittingEffect}
+            className={`flex h-10 w-10 items-center justify-center rounded-full text-white transition active:scale-95 disabled:cursor-not-allowed ${submittingEffect ? "scale-110 bg-[#3ea3ff] ring-4 ring-[#3ea3ff]/30" : "bg-slate-950 hover:bg-slate-800 disabled:bg-slate-200"}`}
+            aria-label={submittingEffect ? (language === "zh" ? "提交中" : "Submitting") : (language === "zh" ? "提交" : "Submit")}
           >
-            {disabled ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-5 w-5" />}
+            {disabled || submittingEffect ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-5 w-5" />}
           </button>
         </div>
       </div>
@@ -1616,6 +1622,12 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
   const [landingPhase, setLandingPhase] = useState<"idle" | "waiting" | "revealing">("idle");
   const [homeGuidePending, setHomeGuidePending] = useState(false);
   const [homeGuideStep, setHomeGuideStep] = useState<0 | 1 | 2 | 3>(0);
+  const [guideSubmitting, setGuideSubmitting] = useState(false);
+  const guideBubbleRef = useRef<HTMLDivElement>(null);
+  const guideInputRef = useRef<HTMLTextAreaElement>(null);
+  const guideSubmitRef = useRef<HTMLButtonElement>(null);
+  const guideShortcutsRef = useRef<HTMLDivElement>(null);
+  const [guidePosition, setGuidePosition] = useState<{ left: number; top: number; arrowX: number; side: "top" | "bottom" } | null>(null);
   const [introProgress, setIntroProgress] = useState([0, 0]);
   const [needProgress, setNeedProgress] = useState(0);
   const [selectedSkill, setSelectedSkill] = useState<string | null>(linkedAgentSession?.skill ?? null);
@@ -1931,14 +1943,47 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
     const timer = window.setTimeout(() => {
       setHomeGuidePending(false);
       setHomeGuideStep(1);
-    }, 2000);
+    }, 200);
     return () => window.clearTimeout(timer);
   }, [homeGuidePending, onboardingOpen, landingPhase, started]);
 
   useEffect(() => {
-    if (homeGuideStep !== 1 && homeGuideStep !== 2) return;
-    const timer = window.setTimeout(() => setHomeGuideStep(homeGuideStep === 1 ? 2 : 3), 1800);
+    if (!homeGuideStep) return;
+    const timer = window.setTimeout(() => {
+      if (homeGuideStep < 3) setHomeGuideStep((homeGuideStep + 1) as 2 | 3);
+      else { setHomeGuideStep(0); setGuideSubmitting(true); }
+    }, 500);
     return () => window.clearTimeout(timer);
+  }, [homeGuideStep]);
+
+  useEffect(() => {
+    if (!guideSubmitting || started) return;
+    const timer = window.setTimeout(() => {
+      setGuideSubmitting(false);
+      submit(prompt);
+    }, 650);
+    return () => window.clearTimeout(timer);
+  }, [guideSubmitting, started, prompt]);
+
+  useLayoutEffect(() => {
+    if (!homeGuideStep) { setGuidePosition(null); return; }
+    const update = () => {
+      const anchor = (homeGuideStep === 1 ? guideShortcutsRef : homeGuideStep === 2 ? guideInputRef : guideSubmitRef).current;
+      const bubble = guideBubbleRef.current;
+      if (!anchor || !bubble) return;
+      const target = anchor.getBoundingClientRect();
+      const width = bubble.offsetWidth;
+      const height = bubble.offsetHeight;
+      const center = target.left + target.width / 2;
+      const left = Math.max(12, Math.min(center - width / 2, window.innerWidth - width - 12));
+      const side = homeGuideStep === 1 || target.bottom + height + 12 > window.innerHeight ? "bottom" : "top";
+      const top = side === "bottom" ? Math.max(12, target.top - height - 12) : target.bottom + 12;
+      setGuidePosition({ left, top, arrowX: Math.max(18, Math.min(center - left, width - 18)), side });
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => { window.removeEventListener("resize", update); window.removeEventListener("scroll", update, true); };
   }, [homeGuideStep]);
 
   const activateNextTodo = (items: AgentTodo[], afterId?: string) => {
@@ -2007,8 +2052,8 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#f7f9fc] text-slate-950">
         {onboardingOpen && (
           <div className="fixed inset-0 z-[1600] overflow-y-auto bg-[#f7f9fc] text-slate-950 animate-in fade-in duration-300">
-            <div className="flex min-h-screen flex-col justify-center px-6 py-10">
-              <div className="mx-auto w-full max-w-3xl space-y-7">
+            <div className="flex min-h-[100dvh] flex-col justify-center px-4 pb-32 pt-12 sm:px-6 sm:py-10">
+              <div className="mx-auto w-full max-w-3xl space-y-5 sm:space-y-7">
                 <div className="flex items-start gap-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
                   <span className="mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-blue-600 text-white"><Sparkles className="h-4 w-4" /></span>
                   <div className="max-w-2xl rounded-3xl rounded-tl-md bg-white px-5 py-4 text-[17px] leading-7 shadow-sm ring-1 ring-slate-200/70">
@@ -2027,8 +2072,8 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
                 )}
               </div>
 
-            {responseReady && <footer className="mx-auto w-full max-w-3xl pt-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="mx-11">
+            {responseReady && <footer className="mx-auto w-full max-w-3xl pt-3 animate-in fade-in slide-in-from-bottom-2 duration-300 sm:pt-5">
+              <div className="ml-11 mr-0 sm:mx-11">
                 <div className="mb-3 flex flex-col items-start gap-2">
                   {(onboardingStep === "discipline" ? disciplineOptions : needOptions).map((item, index) => {
                     const selected = onboardingStep === "discipline" ? onboardingDiscipline === item : onboardingNeed === item;
@@ -2055,7 +2100,7 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
               </div>
             </footer>}
             </div>
-            <div className="fixed bottom-12 left-1/2 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap text-xs text-slate-500 opacity-50 transition-opacity hover:opacity-100 focus-within:opacity-100">
+            <div className="fixed bottom-20 left-1/2 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap text-xs text-slate-500 opacity-50 transition-opacity hover:opacity-100 focus-within:opacity-100 sm:bottom-12">
               <button type="button" onClick={closeOnboarding} className="hover:text-blue-600">{isZh ? "跳过" : "Skip"}</button>
               <span aria-hidden="true" className="h-3 w-px bg-slate-300" />
               <button type="button" onClick={() => { handleAgentLogin(); closeOnboarding(); }} className="hover:text-blue-600">{isZh ? "登录" : "Sign In"}</button>
@@ -2063,7 +2108,7 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
           </div>
         )}
         {inputFlight && <div aria-hidden="true" className="pointer-events-none fixed z-[1700] overflow-hidden rounded-[22px] border border-slate-200 bg-white p-3.5 text-left shadow-[0_18px_55px_-30px_rgba(15,23,42,0.38)]" style={{ left: inputFlight.moving ? inputFlight.to.left : inputFlight.from.left, top: inputFlight.moving ? inputFlight.to.top : inputFlight.from.top, width: inputFlight.moving ? inputFlight.to.width : inputFlight.from.width, height: inputFlight.moving ? inputFlight.to.height : inputFlight.from.height, transition: "left 780ms cubic-bezier(0.22, 1, 0.36, 1), top 780ms cubic-bezier(0.22, 1, 0.36, 1), width 780ms cubic-bezier(0.22, 1, 0.36, 1), height 780ms cubic-bezier(0.22, 1, 0.36, 1)" }}><div className="flex h-28 items-start gap-2 px-2 py-2 text-[15px] leading-6 text-slate-900">{inputFlight.task && <span className="shrink-0 rounded-xl bg-slate-100 px-3 py-1.5 text-sm font-medium">{inputFlight.task}</span>}<span className="line-clamp-3">{inputFlight.text}</span></div><div className="flex justify-end"><span className="grid h-10 w-10 place-items-center rounded-full bg-slate-950 text-white"><ArrowUp className="h-5 w-5" /></span></div></div>}
-        <header className={`flex h-16 shrink-0 items-center justify-between px-7 ${landingPhase === "waiting" ? "opacity-0" : landingPhase === "revealing" ? "animate-in fade-in duration-700" : ""}`}>
+        <header className={`flex h-14 shrink-0 items-center justify-between px-4 sm:h-16 sm:px-7 ${landingPhase === "waiting" ? "opacity-0" : landingPhase === "revealing" ? "animate-in fade-in duration-700" : ""}`}>
           <div className="flex items-center gap-2.5 text-sm font-semibold">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-950 text-white">
               <Bot className="h-4 w-4" />
@@ -2079,17 +2124,17 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
           </button>
         </header>
 
-        <main className={`flex flex-1 items-start overflow-y-auto px-6 pb-14 pt-[clamp(132px,22vh,280px)] ${landingPhase === "waiting" ? "opacity-0" : landingPhase === "revealing" ? "animate-in fade-in duration-700" : ""}`}>
+        <main className={`flex flex-1 items-start overflow-y-auto px-3 pb-24 pt-[clamp(56px,12vh,110px)] sm:px-6 sm:pb-14 sm:pt-[clamp(132px,22vh,280px)] ${landingPhase === "waiting" ? "opacity-0" : landingPhase === "revealing" ? "animate-in fade-in duration-700" : ""}`}>
           <div className="mx-auto w-full max-w-4xl">
             <div className="mx-auto max-w-3xl text-center">
-              <h1 className="text-[42px] font-semibold leading-[1.08] tracking-[-0.04em] text-slate-950">
+              <h1 className="text-[28px] font-semibold leading-[1.15] tracking-[-0.04em] text-slate-950 sm:text-[42px] sm:leading-[1.08]">
                 {isZh ? "你好,今天想执行什么科研任务" : "Hi, what research task to run today?"}
               </h1>
-              <div ref={landingInputRef} className="mt-8">
+              <div ref={landingInputRef} className="mt-6 sm:mt-8">
                 <AgentComposer
                   prompt={prompt}
-                  setPrompt={(value) => { setPrompt(value); if (homeGuideStep === 2 && value.trim()) setHomeGuideStep(3); }}
-                  onSubmit={() => { setHomeGuideStep(0); submit(); }}
+                  setPrompt={setPrompt}
+                  onSubmit={() => { setHomeGuideStep(0); setGuideSubmitting(false); submit(); }}
                   selectedAgent={selectedAgent}
                   onAgentChange={setSelectedAgent}
                   shortcutModel={shortcutModel}
@@ -2097,31 +2142,30 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
                   selectedSkill={selectedSkill}
                   onSelectSkill={selectQuickTask}
                   onClearSkill={clearSkill}
-                  submittingEffect={caseSubmitting}
+                  submittingEffect={caseSubmitting || guideSubmitting}
+                  guideInputRef={guideInputRef}
+                  guideSubmitRef={guideSubmitRef}
                 />
               </div>
-              {homeGuideStep > 0 && <div className="mt-4 flex justify-center animate-in fade-in slide-in-from-bottom-2 duration-300" role="status" aria-live="polite">
-                <div className="relative inline-flex max-w-full items-center gap-4 rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm text-slate-700 shadow-lg shadow-blue-100/60">
-                  <span className={`absolute left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 border-blue-100 bg-white ${homeGuideStep === 1 ? "-bottom-1.5 border-b border-r" : "-top-1.5 border-l border-t"}`} aria-hidden="true" />
-                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#3ea3ff] text-xs font-semibold text-white">{homeGuideStep}</span>
-                  <span>{homeGuideStep === 1 ? (isZh ? "先选择任务" : "First, choose a task") : homeGuideStep === 2 ? (isZh ? "再补充具体要求" : "Then, add your requirements") : (isZh ? "最后点击提交" : "Finally, click submit")}</span>
-                  <button type="button" onClick={() => setHomeGuideStep(0)} className="shrink-0 text-xs text-slate-400 hover:text-blue-600">{isZh ? "跳过" : "Skip"}</button>
-                </div>
+              {homeGuideStep > 0 && <div key={homeGuideStep} ref={guideBubbleRef} className="fixed z-[1750] inline-flex max-w-[calc(100vw-24px)] items-center gap-2 rounded-2xl border border-blue-100 bg-white px-3 py-2.5 text-xs text-slate-700 shadow-lg shadow-blue-100/60 animate-in fade-in zoom-in-95 duration-150 sm:gap-3 sm:px-4 sm:py-3 sm:text-sm" role="status" aria-live="polite" style={{ left: guidePosition?.left ?? -9999, top: guidePosition?.top ?? -9999 }}>
+                <span className={`absolute h-3 w-3 -translate-x-1/2 rotate-45 border-blue-100 bg-white ${guidePosition?.side === "bottom" ? "-bottom-1.5 border-b border-r" : "-top-1.5 border-l border-t"}`} style={{ left: guidePosition?.arrowX ?? 24 }} aria-hidden="true" />
+                <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#3ea3ff] text-[11px] font-semibold text-white sm:h-6 sm:w-6">{homeGuideStep}</span>
+                <span>{homeGuideStep === 1 ? (isZh ? "先选择任务" : "First, choose a task") : homeGuideStep === 2 ? (isZh ? "再补充具体要求" : "Then, add your requirements") : (isZh ? "即将提交任务" : "Submitting the task next")}</span>
+                <button type="button" onClick={() => { setHomeGuideStep(0); setGuideSubmitting(false); }} className="shrink-0 text-xs text-slate-400 hover:text-blue-600">{isZh ? "跳过" : "Skip"}</button>
               </div>}
-              <div className="mt-5 flex flex-wrap justify-center gap-2.5" aria-label={isZh ? "任务快捷方式" : "Task shortcuts"}>
+              <div ref={guideShortcutsRef} className="mt-5 flex flex-wrap justify-center gap-2 sm:gap-2.5" aria-label={isZh ? "任务快捷方式" : "Task shortcuts"}>
                 {launchShortcuts.map((shortcut) => {
                   const Icon = shortcut.icon;
                   const active = activeLaunchShortcut === shortcut.title;
                   return <button key={shortcut.title} type="button" onClick={() => {
                     setActiveLaunchShortcut(active ? null : shortcut.title);
                     setSelectedSkill(active ? null : shortcut.title);
-                    if (homeGuideStep === 1) setHomeGuideStep(2);
                   }} className={`inline-flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-medium shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${active ? "border-[#3ea3ff] bg-[#3ea3ff]/10 text-[#2485df]" : "border-slate-200 bg-white text-slate-600 hover:border-[#3ea3ff] hover:text-slate-950"}`}><Icon className="h-4 w-4 text-[#3ea3ff]" />{isZh ? shortcut.title : launchShortcutEnglish[shortcut.title]?.title ?? shortcut.title}</button>;
                 })}
               </div>
             </div>
 
-            <section className="agent-launch-case-section mx-auto mt-16 max-w-3xl" aria-label={isZh ? "案例" : "Cases"}>
+            <section className="agent-launch-case-section mx-auto mt-10 max-w-3xl sm:mt-16" aria-label={isZh ? "案例" : "Cases"}>
               <div
                 id={`agent-case-panel-${activeCaseTab}`}
                 role="tabpanel"

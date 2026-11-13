@@ -454,7 +454,7 @@ export default function App() {
     <LanguageProvider>
       <BillingProvider>
       <FeedbackTicketsProvider>
-      <div className={`${isReaderView ? "h-screen overflow-hidden bg-white flex" : "min-h-screen bg-white flex"} ${!embeddedAgent ? "pr-[360px]" : ""}`}>
+      <div className={`${isReaderView ? "h-screen overflow-hidden bg-white flex" : "min-h-screen bg-white flex"} ${!embeddedAgent ? "sm:pr-[360px]" : ""}`}>
         {/* Left Sidebar - Only show in list view, library view, and scholar-qa view */}
         {!embeddedAgent && (isHomeFlow || viewMode === "explore" || viewMode === "list" || viewMode === "reader" || viewMode === "library" || viewMode === "scholar-qa" || viewMode === "all-feeds" || viewMode === "paper-reproduction" || viewMode === "idea-discovery" || viewMode === "fudan-collection-search" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "truecite" || viewMode === "tools" || viewMode === "figure-to-pptx" || viewMode === "figure-to-excel" || viewMode === "excel-to-figure" || viewMode === "institution-admin" || viewMode === "survey") && (
           <LeftSidebar
