@@ -1460,7 +1460,7 @@ function WorkbenchPanel({
   );
 }
 
-export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPrompt = "" }: { onOpenProjects: () => void; onOpenSearch: (query: string) => void; onLogin: () => void; initialPrompt?: string }) {
+export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPrompt = "", onCompleteOnboarding }: { onOpenProjects: () => void; onOpenSearch: (query: string) => void; onLogin: () => void; initialPrompt?: string; onCompleteOnboarding?: (draft?: string, task?: string | null) => void }) {
   const { language } = useLanguage();
   const { isAuthenticated, setAuthenticated } = usePrototypeAuth();
   const isZh = language === "zh";
@@ -1669,13 +1669,18 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
         setInputFlight(null);
         setLandingPhase("revealing");
         window.setTimeout(() => setLandingPhase("idle"), 700);
+        onCompleteOnboarding?.(value, task);
       }, 780);
-    } else setPrompt(value);
+    } else {
+      setPrompt(value);
+      onCompleteOnboarding?.(value, task);
+    }
     setOnboardingOpen(false);
   };
   const closeOnboarding = () => {
     try { window.localStorage.setItem("wispaper-agent-onboarding-v1", "done"); } catch { /* prototype storage */ }
     setOnboardingOpen(false);
+    onCompleteOnboarding?.();
   };
 
   useEffect(() => {

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { StorageUsagePanel } from "./StorageUsagePanel";
 import { ResearchTree } from "./ResearchTree";
+import { AgentSettingsLauncher } from "./agent-memory/AgentMemorySettings";
 
 type ProjectSection = "tree" | "files" | "papers" | "surveys" | "agents";
 type ProjectFilter = "active" | "archived" | "trash";
@@ -216,6 +217,7 @@ export function ResearchProjects({ onOpenAgent }: { onOpenAgent: () => void }) {
               })}
             </nav>
             <div className="flex items-center gap-2">
+              <AgentSettingsLauncher projectId={String(selected.id)} projectName={selected.title} />
               <button onClick={() => setShowCollaboration(true)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium hover:bg-slate-50">
                 <Users className="mr-2 inline h-4 w-4" />协作
               </button>

@@ -9,6 +9,13 @@ import { PaperDetail } from "./components/PaperDetail";
 import { MyLibrary } from "./components/MyLibrary";
 import { ScholarSearchHome, extractAcademicIdentifiers, type AcademicIdentifier } from "./components/ScholarSearchHome";
 import { ExplorePage } from "./components/ExplorePage";
+import { WorkspaceHome } from "./components/WorkspaceHome";
+import { HOME_SESSION_KEY, readHomeSession, type HomeTaskId } from "./components/home-task-config";
+import { AskAIProvider } from "./components/ask-ai/AskAI";
+import { useOnboarding } from "./components/onboarding/useOnboarding";
+import { BillingProvider } from "./contexts/BillingContext";
+import { FeedbackTicketsProvider } from "./contexts/FeedbackTicketsContext";
+import { setPrototypeAuthenticated } from "./lib/usePrototypeAuth";
 import { HomePage } from "./components/HomePage";
 import { ScholarQA } from "./components/ScholarQA";
 import { PaperReproduction } from "./components/PaperReproduction";
@@ -18,7 +25,9 @@ import { FudanCollectionResults } from "./components/FudanCollectionResults";
 import { AcademicAgent } from "./components/AcademicAgent";
 import { ResearchProjects } from "./components/ResearchProjects";
 import { ResearchCanvas } from "./components/ResearchCanvas";
+import { InstitutionManagement } from "./components/InstitutionManagement";
 import { FigureToPPTX } from "./components/FigureToPPTX";
+import { ExcelToFigure } from "./components/ExcelToFigure";
 import { ToolsPage } from "./components/ToolsPage";
 import { MockConsole } from "./components/MockConsole";
 import { GlobalAskAIDrawer } from "./components/GlobalAskAIDrawer";
@@ -28,6 +37,7 @@ import { InviteModal } from "./components/InviteModal";
 import { PaywallModal } from "./components/PaywallModal";
 import { RechargeModal } from "./components/RechargeModal";
 import { NotificationDrawer } from "./components/NotificationDrawer";
+import { FeedbackModal } from "./components/FeedbackModal";
 import { LanguageProvider } from "./contexts/LanguageContext";
 import { mockPapers } from "./data/mockPapers";
 import { mockBooks } from "./data/mockBooks";
@@ -35,11 +45,15 @@ import { mockTheses } from "./data/mockTheses";
 import { Paper, FilterOptions } from "./types";
 
 const viewRoutes: Record<string, string> = {
+  'workspace-home': '/',
+  'home-search-preview': '/app/home/search',
+  'home-agent-preview': '/app/home/agent',
+  'home-agent-case': '/app/home/case',
   home: '/landing',
   explore: '/app/explore',
   list: '/app/search',
   'scholar-qa': '/app/ask',
-  'academic-agent': '/',
+  'academic-agent': '/app/agent',
   library: '/app/library',
   'research-projects': '/app/projects',
   'research-canvas': '/app/research-canvas',
@@ -54,10 +68,14 @@ const viewRoutes: Record<string, string> = {
   tools: '/app/tools',
   survey: '/app/survey',
   'figure-to-pptx': '/app/tools/figure-to-pptx',
+  'figure-to-excel': '/app/tools/figure-to-excel',
+  'excel-to-figure': '/app/tools/excel-to-figure',
+  'institution-admin': '/app/institution-admin',
 };
 
 const getViewFromPath = (pathname: string) => {
-  if (pathname === '/' || pathname === '/app/agent' || /^\/app\/agent\/[0-9a-f-]+\/?$/i.test(pathname)) return 'academic-agent';
+  if (pathname === '/' || pathname === '/app/home') return 'workspace-home';
+  if (pathname === '/app/agent' || /^\/app\/agent\/[0-9a-f-]+\/?$/i.test(pathname)) return 'academic-agent';
   if (pathname === '/landing') return 'home';
   if (pathname === '/app/explore' || pathname === '/app/ai-feeds') return 'explore';
   if (pathname === '/app/search' || pathname.startsWith('/app/search/') || pathname === '/scholar-search' || pathname === '/app/scholar-search') return 'list';
@@ -117,10 +135,10 @@ export default function App() {
   const [filters, setFilters] = useState<FilterOptions>(defaultFilters);
   const [selectedPaper, setSelectedPaper] =
     useState<Paper | null>(null);
-  const initialView = typeof window !== 'undefined' ? getViewFromPath(window.location.pathname) : 'home';
+  const initialView = typeof window !== 'undefined' ? getViewFromPath(window.location.pathname) : 'workspace-home';
   const embeddedAgent = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('embedded') === '1';
   const [viewMode, setViewMode] = useState<
-    "home" | "explore" | "list" | "quick-paper" | "detail" | "reader" | "library" | "scholar-qa" | "all-feeds" | "paper-reproduction" | "idea-discovery" | "fudan-collection-search" | "academic-agent" | "research-projects" | "research-canvas" | "truecite" | "tools" | "figure-to-pptx" | "survey"
+    "home" | "workspace-home" | "home-search-preview" | "home-agent-preview" | "home-agent-case" | "explore" | "list" | "quick-paper" | "detail" | "reader" | "library" | "scholar-qa" | "all-feeds" | "paper-reproduction" | "idea-discovery" | "fudan-collection-search" | "academic-agent" | "research-projects" | "research-canvas" | "truecite" | "tools" | "figure-to-pptx" | "survey" | "figure-to-excel" | "excel-to-figure" | "institution-admin"
   >(initialView as any);
   const historyNavigationRef = React.useRef(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -129,11 +147,29 @@ export default function App() {
   const [showDeepSearchTooltip, setShowDeepSearchTooltip] = useState(false);
   const [scholarQAKey, setScholarQAKey] = useState(0);
   const [agentKey, setAgentKey] = useState(0);
+  const [homeGuideOpen, setHomeGuideOpen] = useState(() => {
+    try { return localStorage.getItem('wispaper-agent-onboarding-v1') !== 'done'; } catch { return true; }
+  });
+  React.useEffect(() => {
+    const replayHomeGuide = () => {
+      try { localStorage.removeItem('wispaper-agent-onboarding-v1'); } catch { /* prototype storage */ }
+      setHomeGuideOpen(true);
+      setViewMode('workspace-home');
+    };
+    window.addEventListener('wispaper:retrigger-agent-onboarding', replayHomeGuide);
+    return () => window.removeEventListener('wispaper:retrigger-agent-onboarding', replayHomeGuide);
+  }, []);
+  const [homeLoginRequest, setHomeLoginRequest] = useState(0);
+  const [homeSignedIn, setHomeSignedIn] = useState(() => readHomeSession().signedIn);
+  const [agentTaskActive] = useState(false);
+  const isHomeFlow = ['workspace-home', 'home-search-preview', 'home-agent-preview', 'home-agent-case'].includes(viewMode);
+  const onboarding = useOnboarding(viewMode, agentTaskActive, selectedPaper?.isOpenAccess === true);
   const [initialAskQuestion, setInitialAskQuestion] = useState('');
   const [initialAgentPrompt, setInitialAgentPrompt] = useState('');
   const [mockUserCredits, setMockUserCredits] = useState(50000);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [showNotificationDrawer, setShowNotificationDrawer] = useState(false);
+  const [mockRole] = useState<'org_admin' | 'user'>(() => new URLSearchParams(window.location.search).get('mockRole') === 'user' ? 'user' : 'org_admin');
   const [readerInitialFile, setReaderInitialFile] = useState<File | null>(null);
   const [figureToPPTXFromReader, setFigureToPPTXFromReader] = useState(false);
   const [shortcutResults, setShortcutResults] = useState<Paper[] | null>(null);
@@ -142,8 +178,8 @@ export default function App() {
   React.useEffect(() => {
     if (window.location.pathname === '/app/ai-feeds') {
       window.history.replaceState({ view: 'explore' }, '', '/app/explore');
-    } else if (window.location.pathname === '/app/agent') {
-      window.history.replaceState({ view: 'academic-agent' }, '', '/');
+    } else if (window.location.pathname === '/app/home') {
+      window.history.replaceState({ view: 'workspace-home' }, '', '/');
     } else if (window.location.pathname === '/scholar-search' || window.location.pathname === '/app/scholar-search') {
       window.history.replaceState({ view: 'list' }, '', '/app/search');
     }
@@ -378,13 +414,27 @@ export default function App() {
     setSearchSessionId(null);
   };
 
-  const isReaderView = viewMode === "explore" || viewMode === "list" || viewMode === "detail" || viewMode === "reader" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "survey";
+  const completeHomeGuide = (draft?: string, task?: string | null) => {
+    if (draft) {
+      const selected: HomeTaskId | null = task === '文献综述' || task === 'Literature Review' ? 'review'
+        : task === '灵感发现' || task === 'Idea Discovery' ? 'ideas'
+        : task === '论文评审' || task === 'Paper Review' ? 'peer-review'
+        : task === '搜索文献' || task === 'Paper Search' ? 'search' : null;
+      const session = readHomeSession();
+      try { sessionStorage.setItem(HOME_SESSION_KEY, JSON.stringify({ ...session, draft, selected })); } catch { /* prototype storage */ }
+    }
+    setHomeGuideOpen(false);
+  };
+
+  const isReaderView = isHomeFlow || viewMode === "explore" || viewMode === "list" || viewMode === "detail" || viewMode === "reader" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "survey";
 
   return (
     <LanguageProvider>
+      <BillingProvider>
+      <FeedbackTicketsProvider>
       <div className={`${isReaderView ? "h-screen overflow-hidden bg-white flex" : "min-h-screen bg-white flex"} ${!embeddedAgent ? "pr-[360px]" : ""}`}>
         {/* Left Sidebar - Only show in list view, library view, and scholar-qa view */}
-        {!embeddedAgent && (viewMode === "explore" || viewMode === "list" || viewMode === "reader" || viewMode === "library" || viewMode === "scholar-qa" || viewMode === "all-feeds" || viewMode === "paper-reproduction" || viewMode === "idea-discovery" || viewMode === "fudan-collection-search" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "truecite" || viewMode === "tools" || viewMode === "figure-to-pptx" || viewMode === "survey") && (
+        {!embeddedAgent && (isHomeFlow || viewMode === "explore" || viewMode === "list" || viewMode === "reader" || viewMode === "library" || viewMode === "scholar-qa" || viewMode === "all-feeds" || viewMode === "paper-reproduction" || viewMode === "idea-discovery" || viewMode === "fudan-collection-search" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "truecite" || viewMode === "tools" || viewMode === "figure-to-pptx" || viewMode === "figure-to-excel" || viewMode === "excel-to-figure" || viewMode === "institution-admin" || viewMode === "survey") && (
           <LeftSidebar
             onNavigate={handleWorkspaceNavigate}
             onOpenInvite={() => setShowInviteModal(true)}
@@ -407,6 +457,22 @@ export default function App() {
               onOpenRecharge={() => setShowRechargeModal(true)}
               onStartSearch={handleStartSearchFromHome}
             />
+          ) : isHomeFlow ? homeGuideOpen ? (
+            <AcademicAgent onCompleteOnboarding={completeHomeGuide} onLogin={() => setShowPaywallModal(true)} onOpenSearch={handleStartSearchFromHome} onOpenProjects={() => setViewMode('research-projects')} />
+          ) : (
+            <AskAIProvider view={viewMode} agentTaskActive={agentTaskActive} search={{ id: searchSessionId ?? 'home', query: searchQuery, mode: '学术搜索', count: hasSearched ? filteredPapers.length : 0 }} onboarding={onboarding} overlayRightOffset={embeddedAgent ? 0 : 360}
+              onResume={() => {}} onSearch={handleStartSearchFromHome} onAgent={(query) => { setInitialAgentPrompt(query); setAgentKey((value) => value + 1); setViewMode('academic-agent'); }}>
+              <WorkspaceHome
+                stage={viewMode === 'home-agent-case' ? 'case' : viewMode === 'home-search-preview' ? 'search' : viewMode === 'home-agent-preview' ? 'agent' : 'home'}
+                loginRequest={homeLoginRequest}
+                onAccountChange={(signedIn) => { setHomeSignedIn(signedIn); if (signedIn) setPrototypeAuthenticated(true); }}
+                papers={mockPapers}
+                onSearch={handleStartSearchFromHome}
+                onSearchExample={(item) => { handleSearch(item.prompt, 'deep'); setShortcutResults(item.papers); setViewMode('list'); }}
+                onAgent={(query) => { setInitialAgentPrompt(query); setAgentKey((value) => value + 1); setViewMode('academic-agent'); }}
+                onNavigate={handleWorkspaceNavigate}
+              />
+            </AskAIProvider>
           ) : viewMode === "explore" ? (
             <ExplorePage
               embedded
@@ -568,6 +634,7 @@ export default function App() {
             <QuickPaperPage
               paper={selectedPaper}
               onBack={() => setViewMode("explore")}
+              onWorkspace={() => setViewMode('workspace-home')}
               onOpenReader={() => setViewMode("detail")}
             />
           ) : viewMode === "paper-reproduction" ? (
@@ -599,13 +666,19 @@ export default function App() {
               </div>
             </div>
           ) : viewMode === "tools" ? (
-            <ToolsPage onOpenTrueCite={() => setViewMode('truecite')} onOpenFigureToPPTX={() => { setFigureToPPTXFromReader(false); setViewMode('figure-to-pptx'); }} />
+            <ToolsPage onOpenTrueCite={() => setViewMode('truecite')} onOpenFigureToPPTX={() => { setFigureToPPTXFromReader(false); setViewMode('figure-to-pptx'); }} onOpenFigureToExcel={() => setViewMode('figure-to-excel')} onOpenExcelToFigure={() => setViewMode('excel-to-figure')} />
           ) : viewMode === "figure-to-pptx" ? (
             <FigureToPPTX
               fromReader={figureToPPTXFromReader}
               onBackToTools={() => { setFigureToPPTXFromReader(false); setViewMode('tools'); }}
               onBackToReader={() => { setFigureToPPTXFromReader(false); setViewMode('reader'); }}
             />
+          ) : viewMode === "figure-to-excel" ? (
+            <FigureToPPTX output="excel" onBackToTools={() => setViewMode('tools')} />
+          ) : viewMode === "excel-to-figure" ? (
+            <ExcelToFigure onBackToTools={() => setViewMode('tools')} />
+          ) : viewMode === "institution-admin" ? (
+            mockRole === 'org_admin' ? <InstitutionManagement /> : <main className="m-auto p-8 text-center">当前账号无机构管理权限</main>
           ) : (
             <PaperDetail
               paper={selectedPaper}
@@ -644,13 +717,15 @@ export default function App() {
           isOpen={showNotificationDrawer}
           onClose={() => setShowNotificationDrawer(false)}
         />
+        <FeedbackModal />
 
-        {!embeddedAgent && !['explore', 'library', 'academic-agent', 'research-projects'].includes(viewMode) && !(viewMode === 'list' && hasSearched) && (
+        {!embeddedAgent && !isHomeFlow && !['explore', 'library', 'academic-agent', 'research-projects'].includes(viewMode) && !(viewMode === 'list' && hasSearched) && (
           <GlobalAskAIDrawer key={viewMode} page={viewMode} />
         )}
 
         {!embeddedAgent && <MockConsole
           currentView={viewMode}
+          onOpenBilling={() => setShowPaywallModal(true)}
           userCredits={mockUserCredits}
           onUserCreditsChange={setMockUserCredits}
           onAsk={(input) => {
@@ -666,6 +741,8 @@ export default function App() {
           }}
         />}
       </div>
+      </FeedbackTicketsProvider>
+      </BillingProvider>
     </LanguageProvider>
   );
 }
