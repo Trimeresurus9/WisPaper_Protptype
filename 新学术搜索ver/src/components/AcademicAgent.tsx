@@ -1604,6 +1604,7 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
   const [onboardingOpen, setOnboardingOpen] = useState(() => {
     if (typeof window === "undefined") return false;
     if (new URLSearchParams(window.location.search).get("onboarding") === "1") return true;
+    if (isAuthenticated) return false;
     try { return window.localStorage.getItem("wispaper-agent-onboarding-v1") !== "done"; } catch { return true; }
   });
   const [onboardingStep, setOnboardingStep] = useState<"discipline" | "need">("discipline");
@@ -1876,10 +1877,6 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
   const submit = (text = prompt, modelOverride?: "Lite") => {
     const value = text.trim();
     if (!value || running) return;
-    if (selectedSkill === "搜索文献" && !caseReplay) {
-      onOpenSearch(value);
-      return;
-    }
     if (isAuthenticated && userCredits < 2000) { showCreditGate("agent", value); return; }
     const usingPro = modelOverride !== "Lite" && ((["文献综述", "灵感发现", "论文评审", "组会 PPT"].includes(selectedSkill ?? "") && shortcutModel === "Pro") || (!selectedSkill && (activeTaskModel === "Pro" || selectedAgent === "primary" || selectedAgent === "deep")));
     if (isAuthenticated && userCredits < 40000 && usingPro) { showCreditGate("pro", value); return; }
@@ -2052,7 +2049,7 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
               </div>
             </footer>}
             </div>
-            <div className="fixed bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap text-xs text-slate-500 opacity-50 transition-opacity hover:opacity-100 focus-within:opacity-100">
+            <div className="fixed bottom-12 left-1/2 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap text-xs text-slate-500 opacity-50 transition-opacity hover:opacity-100 focus-within:opacity-100">
               <button type="button" onClick={closeOnboarding} className="hover:text-blue-600">{isZh ? "跳过" : "Skip"}</button>
               <span aria-hidden="true" className="h-3 w-px bg-slate-300" />
               <button type="button" onClick={() => { handleAgentLogin(); closeOnboarding(); }} className="hover:text-blue-600">{isZh ? "登录" : "Sign In"}</button>
