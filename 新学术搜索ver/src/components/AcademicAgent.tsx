@@ -717,11 +717,34 @@ function AgentComposer({
   );
 }
 
-function AgentLoginPrompt({ isZh, onLogin }: { isZh: boolean; onLogin: () => void }) {
-  return <div className="flex w-full items-center justify-between gap-4 rounded-[22px] border border-[#3ea3ff]/30 bg-[#3ea3ff]/5 px-5 py-4 shadow-[0_18px_55px_-30px_rgba(15,23,42,0.38)]">
-    <div className="flex min-w-0 items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#3ea3ff]/15 text-[#2485df]"><UserRound className="h-4 w-4" /></span><span className="text-sm leading-5 text-slate-600">{isZh ? "登录后可继续向 Agent 提问，并保存研究结果" : "Sign in to continue asking the Agent and save your research results"}</span></div>
-    <button type="button" onClick={onLogin} className="shrink-0 rounded-full bg-[#3ea3ff] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2485df]">{isZh ? "登录" : "Sign In"}</button>
+function LogtoMockForm({ isZh, onComplete }: { isZh: boolean; onComplete: () => void }) {
+  const [email, setEmail] = useState("demo@wispaper.com");
+  const [password, setPassword] = useState("Demo@123456");
+  return <form autoComplete="off" onSubmit={(event) => { event.preventDefault(); if (email.trim() && password) onComplete(); }} className="mt-4 space-y-3">
+    <div className="space-y-2">
+      {[
+        { name: "Google", mark: "G", markClass: "font-bold text-[#4285f4]" },
+        { name: "Apple", mark: "A", markClass: "font-semibold text-slate-950" },
+        { name: isZh ? "机构账号" : "Institution", mark: isZh ? "校" : "I", markClass: "font-semibold text-[#2485df]" },
+      ].map((provider) => <button key={provider.name} type="button" onClick={onComplete} className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 transition hover:border-[#3ea3ff] hover:bg-[#3ea3ff]/5"><span aria-hidden="true" className={`w-5 text-center text-base ${provider.markClass}`}>{provider.mark}</span>{isZh ? `使用 ${provider.name} 登录` : `Continue with ${provider.name}`}</button>)}
+    </div>
+    <div className="flex items-center gap-3 py-1 text-[11px] text-slate-400"><span className="h-px flex-1 bg-slate-200" />{isZh ? "或使用邮箱" : "or use email"}<span className="h-px flex-1 bg-slate-200" /></div>
+    <label className="block text-xs font-medium text-slate-600">{isZh ? "邮箱" : "Email"}<input type="email" autoComplete="off" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#3ea3ff]" /></label>
+    <label className="block text-xs font-medium text-slate-600">{isZh ? "密码" : "Password"}<input type="password" autoComplete="off" required value={password} onChange={(event) => setPassword(event.target.value)} placeholder={isZh ? "输入密码" : "Enter password"} className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#3ea3ff]" /></label>
+    <button type="submit" className="w-full rounded-xl bg-[#3ea3ff] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#2485df]">{isZh ? "登录并继续" : "Sign in and continue"}</button>
+    <p className="text-center text-[11px] text-slate-400">{isZh ? "原型演示 · 已预填模拟账号，其他登录方式也可直接体验" : "Prototype demo · mock credentials are prefilled; other options work too"}</p>
+  </form>;
+}
+
+function AgentLoginPrompt({ isZh, mode, onLogin, onComplete }: { isZh: boolean; mode: "inline" | "redirect"; onLogin: () => void; onComplete: () => void }) {
+  return <div className="w-full rounded-[22px] border border-[#3ea3ff]/30 bg-[#3ea3ff]/5 px-5 py-4 shadow-[0_18px_55px_-30px_rgba(15,23,42,0.38)]">
+    <div className="flex items-center justify-between gap-4"><div className="flex min-w-0 items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#3ea3ff]/15 text-[#2485df]"><UserRound className="h-4 w-4" /></span><span className="text-sm leading-5 text-slate-600">{isZh ? "登录后可继续向 Agent 提问，并保存研究结果" : "Sign in to continue asking the Agent and save your research results"}</span></div>{mode === "redirect" && <button type="button" onClick={onLogin} className="shrink-0 rounded-full bg-[#3ea3ff] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2485df]">{isZh ? "前往登录" : "Go to sign in"}</button>}</div>
+    {mode === "inline" && <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-5"><div className="text-base font-semibold text-slate-900">Logto</div><p className="mt-1 text-xs text-slate-500">{isZh ? "登录 WisPaper，继续这项研究" : "Sign in to WisPaper to continue this research"}</p><LogtoMockForm isZh={isZh} onComplete={onComplete} /></div>}
   </div>;
+}
+
+function AgentRedirectLoginPage({ isZh, onBack, onComplete }: { isZh: boolean; onBack: () => void; onComplete: () => void }) {
+  return <div className="fixed inset-0 z-[1600] flex items-center justify-center overflow-y-auto bg-[#f7f9fc] p-6"><div className="my-auto w-full max-w-md"><button type="button" onClick={onBack} className="mb-5 text-sm text-slate-500 hover:text-slate-900">← {isZh ? "返回 Agent" : "Back to Agent"}</button><div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200/50"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#3ea3ff] text-white"><Bot className="h-5 w-5" /></span><span className="text-xl font-semibold text-slate-900">Logto</span></div><h2 className="mt-7 text-2xl font-semibold text-slate-950">{isZh ? "登录 WisPaper" : "Sign in to WisPaper"}</h2><p className="mt-2 text-sm text-slate-500">{isZh ? "登录后继续你的 Agent 研究任务" : "Continue your Agent research task after signing in"}</p><LogtoMockForm isZh={isZh} onComplete={onComplete} /></div></div></div>;
 }
 
 function AgentLoginComposer({ isZh, onLogin }: { isZh: boolean; onLogin: () => void }) {
@@ -1441,7 +1464,25 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
   const { language } = useLanguage();
   const { isAuthenticated, setAuthenticated } = usePrototypeAuth();
   const isZh = language === "zh";
-  const handleAgentLogin = () => { setAuthenticated(true); onLogin(); };
+  const [loginCardMode, setLoginCardMode] = useState<"inline" | "redirect">(() => {
+    try { return window.localStorage.getItem("wispaper-mock-agent-login-style") === "inline" ? "inline" : "redirect"; } catch { return "redirect"; }
+  });
+  const [redirectLoginOpen, setRedirectLoginOpen] = useState(() => new URLSearchParams(window.location.search).get("agentLogin") === "1");
+  const guestCardRef = useRef<HTMLDivElement>(null);
+  const closeRedirectLogin = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("agentLogin");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    setRedirectLoginOpen(false);
+  };
+  const handleAgentLogin = () => { if (redirectLoginOpen) closeRedirectLogin(); setAuthenticated(true); onLogin(); };
+  const openRedirectLogin = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("agentLogin", "1");
+    window.history.pushState({ view: "academic-agent", login: true }, "", `${url.pathname}${url.search}${url.hash}`);
+    setRedirectLoginOpen(true);
+  };
+  const handleLoginIntent = () => loginCardMode === "inline" ? guestCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }) : openRedirectLogin();
   const linkedConversation = useMemo(() => {
     if (typeof window === "undefined") return null;
     const params = new URLSearchParams(window.location.search);
@@ -1505,6 +1546,11 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
   const visibleCaseIcon = selectedShortcut?.icon ?? activeCaseTask.icon;
 
   useEffect(() => () => caseFillTimersRef.current.forEach(window.clearTimeout), []);
+  useEffect(() => {
+    const handleStyle = (event: Event) => setLoginCardMode((event as CustomEvent<{ style: "inline" | "redirect" }>).detail.style);
+    window.addEventListener("wispaper:mock-agent-login-style", handleStyle);
+    return () => window.removeEventListener("wispaper:mock-agent-login-style", handleStyle);
+  }, []);
   useEffect(() => { if (caseReplay || (!isAuthenticated && started)) replayMessagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [caseReplay, isAuthenticated, started, messages.length]);
   useEffect(() => {
     if (!started || !messages.length) return;
@@ -1843,6 +1889,8 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
             </footer>}
             </div>
             <div className="fixed bottom-4 right-6 flex items-center gap-3 text-xs text-slate-500 opacity-50 transition-opacity hover:opacity-100 focus-within:opacity-100">
+              <button type="button" onClick={closeOnboarding} className="hover:text-blue-600">{isZh ? "跳过" : "Skip"}</button>
+              <span aria-hidden="true" className="h-3 w-px bg-slate-300" />
               <button type="button" onClick={() => { handleAgentLogin(); closeOnboarding(); }} className="hover:text-blue-600">{isZh ? "登录" : "Sign In"}</button>
             </div>
           </div>
@@ -2038,14 +2086,14 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
                   正在制定研究计划并选择工具…
                 </div>
               )}
-              {!isAuthenticated && <AgentLoginPrompt isZh={isZh} onLogin={handleAgentLogin} />}
+              {!isAuthenticated && <div ref={guestCardRef}><AgentLoginPrompt isZh={isZh} mode={loginCardMode} onLogin={openRedirectLogin} onComplete={handleAgentLogin} /></div>}
               <div ref={replayMessagesEndRef} />
             </div>
           </div>
 
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-white via-white to-transparent px-5 pb-3 pt-14">
             <div className="pointer-events-auto mx-auto max-w-3xl">
-              {!isAuthenticated ? <AgentLoginComposer isZh={isZh} onLogin={handleAgentLogin} /> : <AgentComposer
+              {!isAuthenticated ? <AgentLoginComposer isZh={isZh} onLogin={handleLoginIntent} /> : <AgentComposer
                 prompt={prompt}
                 setPrompt={setPrompt}
                 onSubmit={() => submit()}
@@ -2096,6 +2144,7 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
           </div>
         </aside>
       )}
+      {redirectLoginOpen && <AgentRedirectLoginPage isZh={isZh} onBack={closeRedirectLogin} onComplete={handleAgentLogin} />}
 
       <aside className="hidden w-14 shrink-0 flex-col items-center border-l border-slate-200 bg-white py-3 lg:flex">
         <button
