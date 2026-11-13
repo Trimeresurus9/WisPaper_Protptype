@@ -17,6 +17,7 @@ interface LeftSidebarProps {
   onResetSearch?: () => void;
   currentView?: string;
   isInstitutionAdmin?: boolean;
+  guestAccount?: { signedIn: boolean; onLogin: () => void };
 }
 
 interface NavItem {
@@ -34,7 +35,8 @@ const navItemsConfig: NavItem[] = [
 ];
 
 const latestWorkspaceNav = [
-  { id: 'explore', label: '首页', icon: Compass },
+  { id: 'workspace-home', label: '首页', icon: Compass },
+  { id: 'explore', label: '原首页', icon: Rss },
   { id: 'scholar-qa', label: '问答', icon: MessageSquare },
   { id: 'scholar-search', label: '搜索', icon: Search },
   { id: 'academic-agent', label: 'Agent', icon: Bot },
@@ -84,7 +86,7 @@ const llmsItems: LLMSItem[] = [
   { id: 'satellite', title: 'Satellite Programing' },
 ];
 
-export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenUpgradePricing, onOpenRecharge, onOpenNotifications, onNewScholarQA, onResetSearch, currentView, isInstitutionAdmin = false }: LeftSidebarProps = {}) {
+export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenUpgradePricing, onOpenRecharge, onOpenNotifications, onNewScholarQA, onResetSearch, currentView, guestAccount, isInstitutionAdmin = false }: LeftSidebarProps = {}) {
   const [activeNav, setActiveNav] = useState('all-feeds');
   const [showMyLibrary, setShowMyLibrary] = useState(false);
   const [showLLMSSection, setShowLLMSSection] = useState(false);
@@ -103,7 +105,9 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenUpg
   const { t } = useLanguage();
 
   React.useEffect(() => {
-    if (currentView === 'explore') {
+    if (currentView === 'workspace-home') {
+      setActiveNav('workspace-home');
+    } else if (currentView === 'explore') {
       setActiveNav('explore');
     } else if (currentView === 'library') {
       setActiveNav('my-library');
@@ -165,7 +169,9 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenUpg
   const handleNavClick = (itemId: string) => {
     setActiveNav(itemId);
     if (onNavigate) {
-      if (itemId === 'explore') {
+      if (itemId === 'workspace-home') {
+        onNavigate('workspace-home');
+      } else if (itemId === 'explore') {
         onNavigate('explore');
       } else if (itemId === 'my-library') {
         onNavigate('library');
@@ -761,15 +767,14 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenUpg
 
       {/* User Panel */}
       <div data-onboarding-anchor="account">
-      <UserPanel 
+      {guestAccount ? <div className={`wh-account ${isCollapsed ? "is-collapsed" : ""}`}><div className="wh-account-icon"><GraduationCap size={17} /></div>{!isCollapsed && <div><strong>{guestAccount.signedIn ? "研究者" : "欢迎来到 WisPaper"}</strong><span>{guestAccount.signedIn ? "演示账号" : "从你的第一个问题开始"}</span></div>}{!guestAccount.signedIn && !isCollapsed && <button aria-label="登录账户" onClick={guestAccount.onLogin}><ArrowRight size={15} /></button>}</div> : <UserPanel
         onOpenInvite={onOpenInvite} 
         onOpenPaywall={onOpenPaywall} 
         onOpenRecharge={onOpenRecharge} 
         onOpenNotifications={onOpenNotifications}
         onOpenSettings={() => setShowSettingsModal(true)}
         isCollapsed={isCollapsed}
-      />
-
+      />}
       </div>
 
       {/* Settings Modal */}

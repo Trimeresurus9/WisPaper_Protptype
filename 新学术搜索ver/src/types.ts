@@ -13,6 +13,9 @@ export interface Paper {
   doi?: string;
   isOpenAccess?: boolean;
   type?: 'paper' | 'book' | 'thesis' | 'special' | 'dataset'; // 资源类型
+  relevance?: 'Perfect' | 'Partial';
+  relevanceReason?: string;
+  isSearchExample?: boolean;
 }
 
 export interface FilterOptions {

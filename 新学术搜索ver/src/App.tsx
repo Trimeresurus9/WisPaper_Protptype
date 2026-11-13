@@ -9,6 +9,8 @@ import { PaperDetail } from "./components/PaperDetail";
 import { MyLibrary } from "./components/MyLibrary";
 import { ScholarSearchHome, extractAcademicIdentifiers, type AcademicIdentifier } from "./components/ScholarSearchHome";
 import { ExplorePage } from "./components/ExplorePage";
+import { WorkspaceHome } from "./components/WorkspaceHome";
+import { readHomeSession } from "./components/home-task-config";
 import { HomePage } from "./components/HomePage";
 import { ScholarQA } from "./components/ScholarQA";
 import { PaperReproduction } from "./components/PaperReproduction";
@@ -41,6 +43,10 @@ import { mockTheses } from "./data/mockTheses";
 import { Paper, FilterOptions } from "./types";
 
 const viewRoutes: Record<string, string> = {
+  'workspace-home': '/app/home',
+  'home-search-preview': '/app/home/search',
+  'home-agent-preview': '/app/home/agent',
+  'home-agent-case': '/app/home/case',
   home: '/landing',
   explore: '/',
   list: '/app/scholar-search',
@@ -71,6 +77,13 @@ const getViewFromPath = (pathname: string) => {
   if (pathname === '/scholar-search' || pathname === '/app/scholar-search') return 'list';
   const match = Object.entries(viewRoutes).find(([, route]) => pathname === route || (route === '/app/paper' && pathname.startsWith('/app/paper/')) || (route === '/app/projects' && pathname.startsWith('/app/projects/')));
   return match?.[0] ?? 'home';
+};
+
+// A home-originated Agent task retains its handoff when this history entry reloads.
+const readHomeAgentLaunch = (): { prompt: string; skill: string } | null => {
+  const task = window.history.state?.unifiedHomeTask;
+  return window.location.pathname === '/app/agent' && typeof task?.prompt === 'string' && typeof task?.skill === 'string'
+    ? { prompt: task.prompt, skill: task.skill } : null;
 };
 
 // Keep the selected paper across refreshes and browser back/forward navigation.
@@ -123,13 +136,16 @@ export default function App() {
     useState<Paper | null>(readSelectedPaper);
   const initialView = typeof window !== 'undefined' ? (['tickets', 'feedback'].includes(new URLSearchParams(window.location.search).get('mock') ?? '') ? 'all-feeds' : getViewFromPath(window.location.pathname)) : 'home';
   const [viewMode, setViewMode] = useState<
-    "home" | "explore" | "list" | "quick-paper" | "detail" | "reader" | "library" | "scholar-qa" | "all-feeds" | "paper-reproduction" | "idea-discovery" | "fudan-collection-search" | "academic-agent" | "research-projects" | "research-canvas" | "truecite" | "tools" | "figure-to-pptx" | "figure-to-excel" | "excel-to-figure" | "institution-admin"
+    "home" | "workspace-home" | "home-search-preview" | "home-agent-preview" | "home-agent-case" | "explore" | "list" | "quick-paper" | "detail" | "reader" | "library" | "scholar-qa" | "all-feeds" | "paper-reproduction" | "idea-discovery" | "fudan-collection-search" | "academic-agent" | "research-projects" | "research-canvas" | "truecite" | "tools" | "figure-to-pptx" | "figure-to-excel" | "excel-to-figure" | "institution-admin"
   >(initialView as any);
   // Prototype role only; actual authorization must be enforced by the server.
   const [mockRole] = useState<'org_admin' | 'user'>(() =>
     new URLSearchParams(window.location.search).get('mockRole') === 'user' ? 'user' : 'org_admin'
   );
   const isInstitutionAdmin = mockRole === 'org_admin';
+  const [homeSignedIn, setHomeSignedIn] = useState(() => readHomeSession().signedIn);
+  const [homeLoginRequest, setHomeLoginRequest] = useState(0);
+  const isHomeFlow = ['workspace-home', 'home-search-preview', 'home-agent-preview', 'home-agent-case'].includes(viewMode);
   const historyNavigationRef = React.useRef(false);
   const [showTasksModal, setShowTasksModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -146,7 +162,8 @@ export default function App() {
   const [agentTaskActive, setAgentTaskActive] = useState(false);
   const onboarding = useOnboarding(viewMode, agentTaskActive, selectedPaper?.isOpenAccess === true);
   const [initialAskQuestion, setInitialAskQuestion] = useState('');
-  const [initialAgentPrompt, setInitialAgentPrompt] = useState('');
+  const [initialAgentPrompt, setInitialAgentPrompt] = useState(() => readHomeAgentLaunch()?.prompt ?? '');
+  const [homeAgentLaunch, setHomeAgentLaunch] = useState<{ prompt: string; skill: string } | null>(readHomeAgentLaunch);
   const [mockUserCredits, setMockUserCredits] = useState(50000);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [showNotificationDrawer, setShowNotificationDrawer] = useState(false);
@@ -164,6 +181,8 @@ export default function App() {
     const handlePopState = () => {
       historyNavigationRef.current = true;
       setSelectedPaper(readSelectedPaper());
+      const homeTask = readHomeAgentLaunch();
+      if (homeTask) { setHomeAgentLaunch(homeTask); setInitialAgentPrompt(homeTask.prompt); }
       setViewMode(getViewFromPath(window.location.pathname) as any);
     };
 
@@ -184,10 +203,14 @@ export default function App() {
     if (paperRoute && selectedPaper) query.set('paper', selectedPaper.id);
     else query.delete('paper');
     const nextUrl = nextPath + (query.size ? `?${query}` : '');
+    const unifiedHomeTask = viewMode === 'academic-agent' && homeAgentLaunch?.prompt === initialAgentPrompt ? homeAgentLaunch : undefined;
+    const nextState = { view: viewMode, ...(unifiedHomeTask ? { unifiedHomeTask } : {}) };
     if (window.location.pathname + window.location.search !== nextUrl && !isProjectDetail) {
-      window.history.pushState({ view: viewMode }, '', nextUrl);
+      window.history.pushState(nextState, '', nextUrl);
+    } else if (!isProjectDetail && window.history.state?.unifiedHomeTask?.prompt !== unifiedHomeTask?.prompt) {
+      window.history.replaceState({ ...window.history.state, ...nextState, unifiedHomeTask }, '', nextUrl);
     }
-  }, [viewMode, selectedPaper?.id]);
+  }, [viewMode, selectedPaper?.id, homeAgentLaunch, initialAgentPrompt]);
 
   React.useEffect(() => {
     if (selectedPaper) {
@@ -328,7 +351,8 @@ export default function App() {
       setInitialAskQuestion('');
       setScholarQAKey((value) => value + 1);
     }
-    setViewMode(view as any);
+    const target = view === 'scholar-search' ? 'list' : view === 'my-library' ? 'library' : view;
+    setViewMode(target as any);
   };
 
   const handleSearch = (query: string) => {
@@ -391,7 +415,7 @@ export default function App() {
     setHasSearched(false);
   };
 
-  const isReaderView = viewMode === "explore" || viewMode === "detail" || viewMode === "reader" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas";
+  const isReaderView = isHomeFlow || viewMode === "explore" || viewMode === "detail" || viewMode === "reader" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas";
 
   return (
     <LanguageProvider>
@@ -401,9 +425,9 @@ export default function App() {
         onResume={guide => { setViewMode(guide.page === 'home' ? 'explore' : guide.page === 'reader' ? 'quick-paper' : 'academic-agent'); onboarding.resume(guide); }}
         onSearch={handleStartSearchFromHome} onAgent={query => { setInitialAgentPrompt(query); setAgentKey(key => key + 1); setViewMode('academic-agent'); }}>
 
-      <div className={isReaderView ? "h-screen overflow-hidden bg-white flex" : "min-h-screen bg-white flex"}>
+      <div className={`${isHomeFlow ? "wh-shell " : ""}${isReaderView ? "h-screen overflow-hidden bg-white flex" : "min-h-screen bg-white flex"}`}>
         {/* Left Sidebar - Only show in list view, library view, and scholar-qa view */}
-        {(viewMode === "explore" || viewMode === "list" || viewMode === "reader" || viewMode === "library" || viewMode === "scholar-qa" || viewMode === "all-feeds" || viewMode === "paper-reproduction" || viewMode === "idea-discovery" || viewMode === "fudan-collection-search" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "truecite" || viewMode === "tools" || viewMode === "figure-to-pptx" || viewMode === "figure-to-excel" || viewMode === "excel-to-figure" || viewMode === "institution-admin") && !(viewMode === "academic-agent" && agentTaskActive) && (
+        {(isHomeFlow || viewMode === "explore" || viewMode === "list" || viewMode === "reader" || viewMode === "library" || viewMode === "scholar-qa" || viewMode === "all-feeds" || viewMode === "paper-reproduction" || viewMode === "idea-discovery" || viewMode === "fudan-collection-search" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "truecite" || viewMode === "tools" || viewMode === "figure-to-pptx" || viewMode === "figure-to-excel" || viewMode === "excel-to-figure" || viewMode === "institution-admin") && viewMode !== "home-agent-case" && !(viewMode === "academic-agent" && agentTaskActive) && (
           <LeftSidebar
             onNavigate={handleWorkspaceNavigate}
             onOpenInvite={() => setShowInviteModal(true)}
@@ -413,7 +437,8 @@ export default function App() {
             onOpenNotifications={() => setShowNotificationDrawer(true)}
             onNewScholarQA={handleResetScholarQA}
             onResetSearch={handleResetSearch}
-            currentView={viewMode}
+            currentView={isHomeFlow ? "workspace-home" : viewMode}
+            guestAccount={isHomeFlow ? { signedIn: homeSignedIn, onLogin: () => setHomeLoginRequest(value => value + 1) } : undefined}
             isInstitutionAdmin={isInstitutionAdmin}
           />
         )}
@@ -427,6 +452,30 @@ export default function App() {
               onOpenPricing={() => openPricing()}
               onOpenRecharge={() => setShowRechargeModal(true)}
               onStartSearch={handleStartSearchFromHome}
+            />
+          ) : isHomeFlow ? (
+            <WorkspaceHome
+              stage={viewMode === "home-agent-case" ? "case" : viewMode === "home-search-preview" ? "search" : viewMode === "home-agent-preview" ? "agent" : "home"}
+              loginRequest={homeLoginRequest}
+              onAccountChange={setHomeSignedIn}
+              papers={mockPapers}
+              onSearch={handleStartSearchFromHome}
+              onSearchExample={item => {
+                setAskSearchSessionId(crypto.randomUUID());
+                setSelectedPaper(null);
+                setFilters(defaultFilters);
+                setSearchQuery(item.prompt);
+                setShortcutResults(item.papers);
+                setHasSearched(true);
+                setViewMode('list');
+              }}
+              onAgent={(query, skill) => {
+                setHomeAgentLaunch({ prompt: query, skill });
+                setInitialAgentPrompt(query);
+                setAgentKey((value) => value + 1);
+                setViewMode("academic-agent");
+              }}
+              onNavigate={handleWorkspaceNavigate}
             />
           ) : viewMode === "explore" ? (
             <ExplorePage
@@ -498,6 +547,7 @@ export default function App() {
                   />
                 </div>
 
+                {shortcutResults?.some(paper => paper.isSearchExample) && <div className="wsp-case-results-note">深度搜索案例 · 论文列表与相关度为示例展示，可修改问题开始自己的搜索。</div>}
                 {!shortcutResults && <SearchThinkingPanel query={searchQuery} />}
 
                 <div className="flex-1 overflow-hidden">
@@ -573,6 +623,7 @@ export default function App() {
             <AcademicAgent
               key={agentKey}
               initialPrompt={initialAgentPrompt}
+              initialSkill={homeAgentLaunch?.prompt === initialAgentPrompt ? homeAgentLaunch.skill : undefined}
               userCredits={mockUserCredits}
               onRecharge={() => setShowRechargeModal(true)}
               onUpgrade={() => openPricing()}
@@ -671,7 +722,7 @@ export default function App() {
 
         <OnboardingExperience key={viewMode === 'quick-paper' ? selectedPaper?.id : viewMode} controller={onboarding} onOpenReader={openSelectedReader} />
 
-        {!(viewMode === "academic-agent" && agentTaskActive) && <MockConsole
+        {!isHomeFlow && !(viewMode === "academic-agent" && agentTaskActive) && <MockConsole
           onboarding={onboarding}
           onNavigateOnboarding={(page) => {
             if (page === 'reader') {

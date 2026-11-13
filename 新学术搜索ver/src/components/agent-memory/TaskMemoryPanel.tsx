@@ -6,11 +6,12 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import './agent-memory.css';
 
 type TaskRecord = { snapshot: ReturnType<typeof contextSnapshot>; correction: string; updated: string; goal: string; progress: string; latest: string };
-export function useTaskMemory(goal: string, progress: string, latest: string, projectId?: string) {
+export function useTaskMemory(goal: string, progress: string, latest: string, projectId?: string, enabled = true) {
   const [id] = useState(() => new URLSearchParams(window.location.search).get('taskId') || crypto.randomUUID());
   const [record, setRecord] = useState<TaskRecord>(() => readLocal(`task:${id}`, {snapshot:contextSnapshot(projectId, id),correction:'',updated:new Date().toISOString(),goal,progress,latest}));
   const [error, setError] = useState('');
   useEffect(() => {
+    if (!enabled) return;
     if (record.correction && !readSettings(taskScope(id)).document) {
       try { saveDocument(taskScope(id), `# Agent.md\n\n${record.correction}`, '已有任务笔记'); }
       catch { setError('任务笔记暂未保存，请重试。'); }
@@ -18,15 +19,17 @@ export function useTaskMemory(goal: string, progress: string, latest: string, pr
     const url = new URL(window.location.href);
     url.searchParams.set('taskId', id); url.searchParams.set('workspace', '1'); url.searchParams.set('prompt', goal);
     window.history.replaceState(window.history.state, '', url);
-  }, [id, goal]);
+  }, [id, goal, enabled]);
   const mounted = useRef(false);
   useEffect(() => {
+    if (!enabled) return;
     if (!mounted.current) { mounted.current = true; return; }
     setRecord(current => ({...current,goal,progress,latest,updated:new Date().toISOString()}));
-  }, [goal,progress,latest]);
+  }, [goal,progress,latest,enabled]);
   useEffect(() => {
+    if (!enabled) return;
     try { writeLocal(`task:${id}`, record); setError(''); } catch { setError('任务笔记暂未保存，请检查浏览器存储空间。'); }
-  }, [id,record]);
+  }, [id,record,enabled]);
   return {record,setRecord,error,id};
 }
 

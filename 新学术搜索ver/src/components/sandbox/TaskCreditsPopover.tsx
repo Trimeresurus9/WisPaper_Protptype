@@ -3,7 +3,8 @@ import { Box, ChevronDown, GraduationCap, Sparkles, X } from 'lucide-react';
 import * as Popover from '@radix-ui/react-popover';
 import './task-credits.css';
 
-export function TaskCreditsPopover({ executionCredits, retentionCredits, onPreviewRetention }: {
+export function TaskCreditsPopover({ executionCredits, retentionCredits, onPreviewRetention, note }: {
+  note?: string;
   executionCredits: number;
   retentionCredits: number;
   onPreviewRetention?: (value: number) => void;
@@ -22,7 +23,7 @@ export function TaskCreditsPopover({ executionCredits, retentionCredits, onPrevi
         <div className="tc-item"><dt><Sparkles size={15}/><span>任务执行<small>模型与工具调用</small></span></dt><dd>{format(executionCredits)}<span>Credits</span></dd></div>
         <div className="tc-item"><dt><Box size={15}/><span>云主机保留<small>保留文件、依赖和配置</small></span></dt><dd>{format(retentionCredits)}<span>Credits</span></dd></div>
       </dl>
-      <p className="tc-note">云主机保留会消耗 Credits，回收后保留已产生的消耗记录。</p>
+      <p className="tc-note">{note || "云主机保留会消耗 Credits，回收后保留已产生的消耗记录。"}</p>
       {onPreviewRetention && <div className="tc-preview"><span>Mock 数据</span><select aria-label="云主机保留消耗示例" value={retentionCredits} onChange={event => onPreviewRetention(Number(event.target.value))}><option value={12}>已有消耗 · 12 Credits</option><option value={0}>暂无消耗 · 0 Credits</option></select></div>}
     </Popover.Content></Popover.Portal>
   </Popover.Root></div>;

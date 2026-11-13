@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Check, ChevronRight, FastForward, FileText, LoaderCircle, Pause, Play, RotateCcw, Search, Sparkles, X } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
+import type { AgentCase } from "../home-agent-cases";
 import "./agent-response.css";
 
 export type ResponseStatus = "running" | "stopped" | "done";
@@ -21,13 +22,13 @@ const toolCalls = [
   { name: "证据整理", detail: "归类研究方法与待验证事项", result: "示例证据已归类", icon: Sparkles },
 ];
 
-function ThinkingLine({ round, elapsed, stopped }: { round: number; elapsed: number; stopped: boolean }) {
+function ThinkingLine({ round, elapsed, stopped, record }: { round: number; elapsed: number; stopped: boolean; record?: { lines: string[]; summary: string } }) {
   const [open, setOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const followRef = useRef(true);
   const complete = elapsed >= THINK_MS;
-  const lineIndex = Math.min(5, Math.floor(elapsed / LINE_MS));
-  const data = rounds[round];
+  const data = record || rounds[round];
+  const lineIndex = Math.min(data.lines.length - 1, Math.floor(elapsed / LINE_MS));
   useLayoutEffect(() => {
     if (open && followRef.current && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [open, lineIndex]);
@@ -41,31 +42,31 @@ function ThinkingLine({ round, elapsed, stopped }: { round: number; elapsed: num
     </Popover.Trigger>
     <Popover.Portal>
       <Popover.Content className="ar-popover" side="bottom" align="start" sideOffset={8} collisionPadding={16} aria-label={`第 ${round + 1} 轮思考过程`}>
-        <div className="ar-popover-head"><span><Sparkles size={14}/>思考过程 <small>第 {round + 1} 轮 · {complete ? "已完成" : stopped ? "已暂停" : "进行中"}</small></span><Popover.Close aria-label="关闭思考过程"><X size={15}/></Popover.Close></div>
+        <div className="ar-popover-head"><span><Sparkles size={14}/>{record ? "案例任务记录" : "思考过程"} <small>第 {round + 1} 轮 · {complete ? "已完成" : stopped ? "已暂停" : "进行中"}</small></span><Popover.Close aria-label="关闭思考过程"><X size={15}/></Popover.Close></div>
         <div className="ar-process-scroll" ref={scrollRef} tabIndex={0} aria-label="可滚动的思考过程" onScroll={event => { const el = event.currentTarget; followRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 12; }}>
           {data.lines.slice(0, lineIndex + 1).map((line, index) => <div key={line} className={index === lineIndex && !complete ? "is-current" : ""}><span>{String(index + 1).padStart(2, "0")}</span><span>{line}</span></div>)}
         </div>
-        <div className="ar-popover-foot">模拟过程 · 固定 4 行，滚动查看{!complete && !stopped ? " · 自动跟随最新进度" : ""}</div>
+        <div className="ar-popover-foot">{record ? "已完成案例 · 不执行新任务" : "模拟过程 · 固定 4 行，滚动查看"}{!complete && !stopped ? " · 自动跟随最新进度" : ""}</div>
         <Popover.Arrow className="ar-popover-arrow"/>
       </Popover.Content>
     </Popover.Portal>
   </Popover.Root>;
 }
 
-export function AgentResponse({ task, status, onStatusChange, canReplay = true }: { task: string; status: ResponseStatus; onStatusChange: (status: ResponseStatus) => void; canReplay?: boolean }) {
+export function AgentResponse({ task, status, onStatusChange, canReplay = true, casePreview }: { task: string; status: ResponseStatus; onStatusChange: (status: ResponseStatus) => void; canReplay?: boolean; casePreview?: { item: AgentCase; step: number; view: 'result' | 'process'; onOpenResult: () => void } }) {
   const [elapsed, setElapsed] = useState(0);
   const [replay, setReplay] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const callbackRef = useRef(onStatusChange);
   callbackRef.current = onStatusChange;
   useEffect(() => {
-    if (status !== "running" || elapsed >= COMPLETE_MS) return;
+    if (casePreview || status !== "running" || elapsed >= COMPLETE_MS) return;
     const timer = window.setTimeout(() => setElapsed(value => Math.min(COMPLETE_MS, value + 500)), 500);
     return () => window.clearTimeout(timer);
-  }, [elapsed, status]);
+  }, [elapsed, status, !!casePreview]);
   useEffect(() => {
-    if (elapsed >= COMPLETE_MS && status !== "done") callbackRef.current("done");
-  }, [elapsed, status]);
+    if (!casePreview && elapsed >= COMPLETE_MS && status !== "done") callbackRef.current("done");
+  }, [elapsed, status, !!casePreview]);
   const complete = elapsed >= COMPLETE_MS;
   useLayoutEffect(() => {
     const scroller = rootRef.current?.closest(".br-chat-scroll");
@@ -77,7 +78,19 @@ export function AgentResponse({ task, status, onStatusChange, canReplay = true }
     scroller.addEventListener("scroll", onScroll);
     return () => { observer.disconnect(); scroller.removeEventListener("scroll", onScroll); };
   }, []);
-  return <div className="ar-response" ref={rootRef} data-response-state={complete ? "done" : status}>
+  return <div className="ar-response" ref={rootRef} data-response-state={casePreview || complete ? "done" : status}>
+    {casePreview ? <>
+      <div className="ar-demo-label">已完成案例 <span>免费体验 · 0 积分</span></div>
+      {casePreview.view === 'result' ? <div className="ar-case-result-summary"><h3>{casePreview.item.resultTitle}</h3><p>{casePreview.item.brief}</p><div className="ar-case-deliverables">{casePreview.item.result.slice(0, 3).map((section, index) => <div key={section.title}><span>0{index+1}</span><strong>{section.title}</strong><Check size={14}/></div>)}</div><button className="br-source-row" onClick={casePreview.onOpenResult}><FileText size={17}/><span>{casePreview.item.fileName}<small>打开完整成果{casePreview.item.slides ? ' · 6 页幻灯片与讲稿' : ''}</small></span><ChevronRight size={15}/></button><p className="ar-case-result-hint">你可以直接阅读成果，也可以查看 Agent 如何完成这项任务。</p></div> : <>
+      <ThinkingLine round={0} elapsed={THINK_MS} stopped={false} record={{ summary: "已明确任务范围与交付目标。", lines: casePreview.item.context }}/>
+      <p>{casePreview.item.brief}</p>
+      {casePreview.step >= 1 && <div className="br-execution"><div className="br-execution-head"><span><FileText size={16}/>研究计划</span><span>3 / 3</span></div><ol>{casePreview.item.plan.map(plan => <li key={plan.title}><Check size={17}/><div><strong>{plan.title}</strong><small>{plan.body}</small></div></li>)}</ol></div>}
+      {casePreview.step >= 2 && <>
+        <div className="ar-tools" aria-label="工具调用">{casePreview.item.findings.map((finding,index) => <div className="ar-tool is-done" key={finding.title}><FileText size={14}/><span><strong>{casePreview.item.sources[index]?.title || finding.title}</strong><small>{finding.body}</small></span><Check size={13}/></div>)}</div>
+        <ThinkingLine round={1} elapsed={THINK_MS} stopped={false} record={{ summary: "已整理材料与执行记录。", lines: casePreview.item.findings.map(finding => `${finding.title}：${finding.body}`) }}/>
+      </>}
+      </>}
+    </> : <>
     <div className="ar-demo-label">输出过程演示 <span>慢速 · 约 55 秒</span></div>
     <ThinkingLine key={`${replay}-0`} round={0} elapsed={elapsed} stopped={status === "stopped"}/>
     {elapsed >= TOOLS_START && <div className="ar-tools" aria-label="工具调用">{toolCalls.map(({ name, detail, result, icon: Icon }, index) => {
@@ -95,5 +108,6 @@ export function AgentResponse({ task, status, onStatusChange, canReplay = true }
       </> : canReplay && complete && <button onClick={() => {setElapsed(0); setReplay(value => value + 1); onStatusChange("running");}}><RotateCcw size={12}/>重新演示</button>}
       <span role="status">{complete ? "回答已完成" : status === "stopped" ? "演示已暂停" : "点击思考行，查看过程"}</span>
     </div>
+    </>}
   </div>;
 }

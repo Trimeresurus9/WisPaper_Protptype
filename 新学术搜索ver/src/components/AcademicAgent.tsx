@@ -366,7 +366,7 @@ function AgentComposer({
   const [showAgents, setShowAgents] = useState(false);
   const currentAgent = agentTiers.find((tier) => tier.id === selectedAgent) ?? agentTiers[1];
   const CurrentAgentIcon = currentAgent.icon;
-  const selectedTask = quickTasks.find((task) => task.title === selectedSkill);
+  const selectedTask = quickTasks.find((task) => task.title === selectedSkill) || (selectedSkill ? { title: selectedSkill, icon: Sparkles } : undefined);
   const SelectedSkillIcon = selectedTask?.icon;
 
   return (
@@ -1133,20 +1133,20 @@ function WorkbenchPanel({
   );
 }
 
-export function AcademicAgent({ onOpenProjects, initialPrompt = "", onTaskActiveChange, onNavigate, userCredits = 50000, onRecharge, onUpgrade }: { onOpenProjects: () => void; initialPrompt?: string; onTaskActiveChange?: (active: boolean) => void; onNavigate?: (view: string) => void; userCredits?: number; onRecharge?: () => void; onUpgrade?: () => void }) {
+export function AcademicAgent({ onOpenProjects, initialPrompt = "", initialSkill, initialDraft = "", onTaskActiveChange, onNavigate, userCredits = 50000, onRecharge, onUpgrade }: { onOpenProjects: () => void; initialPrompt?: string; initialSkill?: string; initialDraft?: string; onTaskActiveChange?: (active: boolean) => void; onNavigate?: (view: string) => void; userCredits?: number; onRecharge?: () => void; onUpgrade?: () => void }) {
   const [launchContext] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    const skill = params.get("skill");
+    const skill = initialSkill || params.get("skill");
     return {
       prompt: params.get("prompt") || "",
-      skill: quickTasks.some((task) => task.title === skill) ? skill : null,
+      skill: initialSkill || (quickTasks.some((task) => task.title === skill) ? skill : null),
       projectId: params.get("projectId") || "",
       projectTitle: params.get("projectTitle") || "",
       openWorkspace: params.has("workspace"),
     };
   });
   const startingPrompt = initialPrompt.trim() || launchContext.prompt.trim();
-  const [prompt, setPrompt] = useState(startingPrompt);
+  const [prompt, setPrompt] = useState(startingPrompt || initialDraft);
   const [selectedSkill, setSelectedSkill] = useState<string | null>(launchContext.skill);
   const [taskSkill, setTaskSkill] = useState<string | null>(launchContext.skill);
   const [started, setStarted] = useState(() => launchContext.openWorkspace && Boolean(startingPrompt));
