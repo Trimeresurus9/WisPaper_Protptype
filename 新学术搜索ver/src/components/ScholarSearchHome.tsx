@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Search, ArrowRight, ChevronRight, ChevronLeft, BookOpen, GraduationCap, Infinity, ChevronDown, Bot, Lightbulb, Presentation, Bookmark, ThumbsUp, ThumbsDown, SlidersHorizontal, Zap, CircleHelp, RefreshCw, Atom, Leaf, HeartPulse, Brain, ChartNoAxesCombined } from 'lucide-react';
+import { Search, ArrowRight, ChevronRight, ChevronLeft, BookOpen, GraduationCap, Infinity, LockKeyhole, ChevronDown, Bot, Lightbulb, Presentation, Bookmark, ThumbsUp, ThumbsDown, SlidersHorizontal, Zap, CircleHelp, RefreshCw, Atom, Leaf, HeartPulse, Brain, ChartNoAxesCombined } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { usePrototypeAuth } from '../lib/usePrototypeAuth';
 
 interface ScholarSearchHomeProps {
   onSearch: (query: string, mode?: 'quick' | 'deep') => void;
@@ -91,6 +92,7 @@ const searchExampleSets: SearchExample[][] = [
 ];
 
 export function ScholarSearchHome({ onSearch, onQuickOpen }: ScholarSearchHomeProps) {
+  const { isAuthenticated } = usePrototypeAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchMode, setSearchMode] = useState<'quick' | 'deep'>('quick');
   const [exampleSetIndex, setExampleSetIndex] = useState(0);
@@ -163,13 +165,14 @@ export function ScholarSearchHome({ onSearch, onQuickOpen }: ScholarSearchHomePr
                   >
                     <Atom className={`h-4 w-4 ${searchMode === 'deep' ? 'text-[#2f9cff]' : ''}`} />
                     Deep Mode
+                    {!isAuthenticated && <LockKeyhole className="h-3.5 w-3.5" aria-label="Sign in required" />}
                     <CircleHelp className="h-3.5 w-3.5" />
                   </button>
                 </div>
 
                 <div className="flex items-center justify-end gap-3">
                   <span className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#f1f3f5] px-3 text-sm font-medium text-[#46505d]">
-                    <Infinity className="h-4 w-4" /> Unmetered
+                    {searchMode === 'quick' ? <><Infinity className="h-4 w-4" /> Unmetered</> : !isAuthenticated ? <><LockKeyhole className="h-4 w-4" /> Sign in required</> : <><Atom className="h-4 w-4" /> Deep Search</>}
                   </span>
                   <button
                     type="button"
@@ -186,7 +189,9 @@ export function ScholarSearchHome({ onSearch, onQuickOpen }: ScholarSearchHomePr
             <p className="px-5 py-3 text-center text-xs leading-5 text-[#95a0b1] sm:text-sm">
               {searchMode === 'quick'
                 ? 'Based on keyword matching. Best suited for finding specific paper titles or performing broad searches, similar to Google Scholar.'
-                : 'Understands research intent and relationships. Best suited for complex questions, comparisons, and evidence-driven discovery.'}
+                : isAuthenticated
+                  ? 'Understands research intent and relationships. Best suited for complex questions, comparisons, and evidence-driven discovery.'
+                  : 'Sign in to run Deep Search. Your current question will be kept for you.'}
             </p>
           </div>
         </div>

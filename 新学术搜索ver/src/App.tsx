@@ -38,7 +38,9 @@ import { PaywallModal } from "./components/PaywallModal";
 import { RechargeModal } from "./components/RechargeModal";
 import { NotificationDrawer } from "./components/NotificationDrawer";
 import { FeedbackModal } from "./components/FeedbackModal";
+import { DeepSearchLoginDialog } from "./components/DeepSearchLoginDialog";
 import { LanguageProvider } from "./contexts/LanguageContext";
+import { usePrototypeAuth } from "./lib/usePrototypeAuth";
 import { mockPapers } from "./data/mockPapers";
 import { mockBooks } from "./data/mockBooks";
 import { mockTheses } from "./data/mockTheses";
@@ -123,6 +125,7 @@ if (typeof console !== 'undefined') {
 
 // WisPaper Main Application
 export default function App() {
+  const { isAuthenticated, setAuthenticated } = usePrototypeAuth();
   const defaultFilters: FilterOptions = {
     years: [],
     categories: [],
@@ -133,6 +136,12 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState(() => getStoredSearchQuery(initialSearchSessionId));
   const [hasSearched, setHasSearched] = useState(Boolean(initialSearchSessionId));
   const [searchMode, setSearchMode] = useState<'quick' | 'deep'>('quick');
+  const [pendingDeepSearch, setPendingDeepSearch] = useState<
+    | { kind: 'run'; query: string; examplePapers?: Paper[]; navigateToResults?: boolean }
+    | { kind: 'upgrade'; query: string }
+    | null
+  >(null);
+  React.useEffect(() => { if (!isAuthenticated && searchMode === 'deep') setSearchMode('quick'); }, [isAuthenticated, searchMode]);
   const [filters, setFilters] = useState<FilterOptions>(defaultFilters);
   const [selectedPaper, setSelectedPaper] =
     useState<Paper | null>(null);
@@ -339,15 +348,46 @@ export default function App() {
     setViewMode(view as any);
   };
 
-  const handleSearch = (query: string, mode: 'quick' | 'deep' = 'quick') => {
+  const executeSearch = (query: string, mode: 'quick' | 'deep', examplePapers?: Paper[], navigateToResults = false) => {
     const sessionId = createSearchSessionId();
     const identifiers = extractAcademicIdentifiers(query);
-    setShortcutResults(identifiers.length > 0 ? identifiers.map(resolveShortcutPaper) : null);
+    setShortcutResults(examplePapers ?? (identifiers.length > 0 ? identifiers.map(resolveShortcutPaper) : null));
     setSearchQuery(query);
     setSearchMode(mode);
     setSearchSessionId(sessionId);
     window.sessionStorage.setItem(`wispaper-search:${sessionId}`, query);
     setHasSearched(true);
+    if (navigateToResults) setViewMode('list');
+  };
+
+  const handleSearch = (query: string, mode: 'quick' | 'deep' = 'quick', examplePapers?: Paper[], navigateToResults = false) => {
+    if (mode === 'deep' && !isAuthenticated) {
+      setPendingDeepSearch({ kind: 'run', query, examplePapers, navigateToResults });
+      return;
+    }
+    executeSearch(query, mode, examplePapers, navigateToResults);
+  };
+
+  const startDeepSearchFromResults = () => {
+    if (!isAuthenticated) {
+      setPendingDeepSearch({ kind: 'upgrade', query: searchQuery });
+      return;
+    }
+    setSearchMode('deep');
+  };
+
+  const finishDeepSearchLogin = () => {
+    const pending = pendingDeepSearch;
+    if (!pending) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('guest')) {
+      url.searchParams.delete('guest');
+      window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    }
+    setAuthenticated(true);
+    setPendingDeepSearch(null);
+    if (pending.kind === 'upgrade') setSearchMode('deep');
+    else executeSearch(pending.query, 'deep', pending.examplePapers, pending.navigateToResults);
   };
 
   const handleQuickOpen = (identifier: AcademicIdentifier) => {
@@ -443,7 +483,7 @@ export default function App() {
                 onAccountChange={(signedIn) => { setHomeSignedIn(signedIn); if (signedIn) setPrototypeAuthenticated(true); }}
                 papers={mockPapers}
                 onSearch={handleStartSearchFromHome}
-                onSearchExample={(item) => { handleSearch(item.prompt, 'deep'); setShortcutResults(item.papers); setViewMode('list'); }}
+                onSearchExample={(item) => handleSearch(item.prompt, 'deep', item.papers, true)}
                 onAgent={(query) => { setInitialAgentPrompt(query); setAgentKey((value) => value + 1); setViewMode('academic-agent'); }}
                 onNavigate={handleWorkspaceNavigate}
               />
@@ -535,7 +575,7 @@ export default function App() {
                       resultCount={filteredPapers.length}
                       sessionId={searchSessionId ?? 'search-draft'}
                       mode={searchMode}
-                      onStartDeepSearch={() => setSearchMode('deep')}
+                      onStartDeepSearch={startDeepSearchFromResults}
                       onOpenAgent={(prompt) => {
                         setInitialAgentPrompt(prompt);
                         setAgentKey((value) => value + 1);
@@ -693,6 +733,7 @@ export default function App() {
           onClose={() => setShowNotificationDrawer(false)}
         />
         <FeedbackModal />
+        {pendingDeepSearch && <DeepSearchLoginDialog query={pendingDeepSearch.query} onClose={() => setPendingDeepSearch(null)} onComplete={finishDeepSearchLogin} />}
 
         {!embeddedAgent && !isHomeFlow && !['explore', 'library', 'academic-agent', 'research-projects'].includes(viewMode) && !(viewMode === 'list' && hasSearched) && (
           <GlobalAskAIDrawer key={viewMode} page={viewMode} />
