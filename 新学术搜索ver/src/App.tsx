@@ -10,7 +10,8 @@ import { MyLibrary } from "./components/MyLibrary";
 import { ScholarSearchHome, extractAcademicIdentifiers, type AcademicIdentifier } from "./components/ScholarSearchHome";
 import { ExplorePage } from "./components/ExplorePage";
 import { WorkspaceHome } from "./components/WorkspaceHome";
-import { readHomeSession } from "./components/home-task-config";
+import { readHomeSession, HOME_SESSION_KEY } from "./components/home-task-config";
+import { BrowserResearch } from "./components/browser-use/BrowserResearch";
 import { HomePage } from "./components/HomePage";
 import { ScholarQA } from "./components/ScholarQA";
 import { PaperReproduction } from "./components/PaperReproduction";
@@ -80,10 +81,10 @@ const getViewFromPath = (pathname: string) => {
 };
 
 // A home-originated Agent task retains its handoff when this history entry reloads.
-const readHomeAgentLaunch = (): { prompt: string; skill: string } | null => {
+const readHomeAgentLaunch = (): { prompt: string; skill: string; requiresLogin?: boolean } | null => {
   const task = window.history.state?.unifiedHomeTask;
   return window.location.pathname === '/app/agent' && typeof task?.prompt === 'string' && typeof task?.skill === 'string'
-    ? { prompt: task.prompt, skill: task.skill } : null;
+    ? { prompt: task.prompt, skill: task.skill, requiresLogin: task.requiresLogin === true } : null;
 };
 
 // Keep the selected paper across refreshes and browser back/forward navigation.
@@ -163,7 +164,13 @@ export default function App() {
   const onboarding = useOnboarding(viewMode, agentTaskActive, selectedPaper?.isOpenAccess === true);
   const [initialAskQuestion, setInitialAskQuestion] = useState('');
   const [initialAgentPrompt, setInitialAgentPrompt] = useState(() => readHomeAgentLaunch()?.prompt ?? '');
-  const [homeAgentLaunch, setHomeAgentLaunch] = useState<{ prompt: string; skill: string } | null>(readHomeAgentLaunch);
+  const [homeAgentLaunch, setHomeAgentLaunch] = useState<{ prompt: string; skill: string; requiresLogin?: boolean } | null>(readHomeAgentLaunch);
+  const isGuestAgent = viewMode === 'academic-agent' && !homeSignedIn && homeAgentLaunch?.requiresLogin === true && homeAgentLaunch.prompt === initialAgentPrompt;
+  const finishGuestLogin = () => {
+    const session = { ...readHomeSession(), signedIn: true };
+    try { sessionStorage.setItem(HOME_SESSION_KEY, JSON.stringify(session)); } catch {}
+    setHomeSignedIn(true);
+  };
   const [mockUserCredits, setMockUserCredits] = useState(50000);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [showNotificationDrawer, setShowNotificationDrawer] = useState(false);
@@ -207,7 +214,7 @@ export default function App() {
     const nextState = { view: viewMode, ...(unifiedHomeTask ? { unifiedHomeTask } : {}) };
     if (window.location.pathname + window.location.search !== nextUrl && !isProjectDetail) {
       window.history.pushState(nextState, '', nextUrl);
-    } else if (!isProjectDetail && window.history.state?.unifiedHomeTask?.prompt !== unifiedHomeTask?.prompt) {
+    } else if (!isProjectDetail && JSON.stringify(window.history.state?.unifiedHomeTask) !== JSON.stringify(unifiedHomeTask)) {
       window.history.replaceState({ ...window.history.state, ...nextState, unifiedHomeTask }, '', nextUrl);
     }
   }, [viewMode, selectedPaper?.id, homeAgentLaunch, initialAgentPrompt]);
@@ -427,7 +434,7 @@ export default function App() {
 
       <div className={`${isHomeFlow ? "wh-shell " : ""}${isReaderView ? "h-screen overflow-hidden bg-white flex" : "min-h-screen bg-white flex"}`}>
         {/* Left Sidebar - Only show in list view, library view, and scholar-qa view */}
-        {(isHomeFlow || viewMode === "explore" || viewMode === "list" || viewMode === "reader" || viewMode === "library" || viewMode === "scholar-qa" || viewMode === "all-feeds" || viewMode === "paper-reproduction" || viewMode === "idea-discovery" || viewMode === "fudan-collection-search" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "truecite" || viewMode === "tools" || viewMode === "figure-to-pptx" || viewMode === "figure-to-excel" || viewMode === "excel-to-figure" || viewMode === "institution-admin") && viewMode !== "home-agent-case" && !(viewMode === "academic-agent" && agentTaskActive) && (
+        {(isHomeFlow || viewMode === "explore" || viewMode === "list" || viewMode === "reader" || viewMode === "library" || viewMode === "scholar-qa" || viewMode === "all-feeds" || viewMode === "paper-reproduction" || viewMode === "idea-discovery" || viewMode === "fudan-collection-search" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "truecite" || viewMode === "tools" || viewMode === "figure-to-pptx" || viewMode === "figure-to-excel" || viewMode === "excel-to-figure" || viewMode === "institution-admin") && viewMode !== "home-agent-case" && !(viewMode === "academic-agent" && (agentTaskActive || isGuestAgent)) && (
           <LeftSidebar
             onNavigate={handleWorkspaceNavigate}
             onOpenInvite={() => setShowInviteModal(true)}
@@ -469,8 +476,8 @@ export default function App() {
                 setHasSearched(true);
                 setViewMode('list');
               }}
-              onAgent={(query, skill) => {
-                setHomeAgentLaunch({ prompt: query, skill });
+              onAgent={(query, skill, requiresLogin = false) => {
+                setHomeAgentLaunch({ prompt: query, skill, requiresLogin });
                 setInitialAgentPrompt(query);
                 setAgentKey((value) => value + 1);
                 setViewMode("academic-agent");
@@ -620,7 +627,7 @@ export default function App() {
           ) : viewMode === "idea-discovery" ? (
             <IdeaDiscovery />
           ) : viewMode === "academic-agent" ? (
-            <AcademicAgent
+            isGuestAgent ? <BrowserResearch key={`guest-${agentKey}`} initialTask={initialAgentPrompt} initialSkill={homeAgentLaunch?.skill} guestLogin={{ onComplete: finishGuestLogin, onEdit: () => setViewMode("workspace-home") }} onBack={() => setViewMode("workspace-home")} onNavigate={handleWorkspaceNavigate}/> : <AcademicAgent
               key={agentKey}
               initialPrompt={initialAgentPrompt}
               initialSkill={homeAgentLaunch?.prompt === initialAgentPrompt ? homeAgentLaunch.skill : undefined}
@@ -720,9 +727,9 @@ export default function App() {
           onClose={() => setShowNotificationDrawer(false)}
         />
 
-        <OnboardingExperience key={viewMode === 'quick-paper' ? selectedPaper?.id : viewMode} controller={onboarding} onOpenReader={openSelectedReader} />
+        {!isGuestAgent && <OnboardingExperience key={viewMode === 'quick-paper' ? selectedPaper?.id : viewMode} controller={onboarding} onOpenReader={openSelectedReader} />}
 
-        {!isHomeFlow && !(viewMode === "academic-agent" && agentTaskActive) && <MockConsole
+        {!isHomeFlow && !(viewMode === "academic-agent" && (agentTaskActive || isGuestAgent)) && <MockConsole
           onboarding={onboarding}
           onNavigateOnboarding={(page) => {
             if (page === 'reader') {

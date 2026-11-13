@@ -16,7 +16,7 @@ interface WorkspaceHomeProps {
   papers: Paper[];
   onSearch: (query: string) => void;
   onSearchExample: (item: HomeSearchCase) => void;
-  onAgent: (query: string, skill: string) => void;
+  onAgent: (query: string, skill: string, requiresLogin?: boolean) => void;
   onNavigate: (view: string) => void;
   stage: HomeStage;
   loginRequest: number;
@@ -122,11 +122,14 @@ export function WorkspaceHome({ papers, onSearch, onSearchExample, onAgent, onNa
     const query = session.draft.trim();
     if (!query) return;
     const task = resolveHomeTask(query, session.selected);
-    const matchingExample = task === 'search' ? homeSearchCases.find(item => item.prompt === query) : undefined;
-    if (matchingExample) { onSearchExample(matchingExample); return; }
-    patch({ task, query, answers: [], answerDraft: '' });
-    setExpandedPaper(null);
-    onNavigate(task === 'search' ? 'home-search-preview' : 'home-agent-preview');
+    const nextSession = { ...session, task, query, answers: [], answerDraft: '' };
+    setSession(nextSession);
+    // Persist before navigation unmounts this page; the next effect would be skipped.
+    try { sessionStorage.setItem(HOME_SESSION_KEY, JSON.stringify(nextSession)); } catch {}
+    const skill = task === 'slides' ? 'PPT 创作' : homeTaskConfigs.find(item => item.id === task)!.label;
+    if (!session.signedIn) { onAgent(query, skill, true); return; }
+    if (task === 'search') onSearch(query);
+    else onAgent(query, skill);
   };
   const answer = (value: string) => {
     if (!value.trim() || ready) return;
