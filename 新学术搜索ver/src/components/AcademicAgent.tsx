@@ -1557,6 +1557,14 @@ function WorkbenchPanel({
   );
 }
 
+function clearOnboardingDemoParams() {
+  const url = new URL(window.location.href);
+  if (url.searchParams.get("onboarding") !== "1") return;
+  url.searchParams.delete("onboarding");
+  url.searchParams.delete("guest");
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
 export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade, userCredits, initialPrompt = "" }: { onOpenProjects: () => void; onOpenSearch: (query: string) => void; onLogin: () => void; onUpgrade: () => void; userCredits: number; initialPrompt?: string }) {
   const { language } = useLanguage();
   const { isAuthenticated, setAuthenticated } = usePrototypeAuth();
@@ -1595,6 +1603,7 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
   const [prompt, setPrompt] = useState("");
   const [onboardingOpen, setOnboardingOpen] = useState(() => {
     if (typeof window === "undefined") return false;
+    if (new URLSearchParams(window.location.search).get("onboarding") === "1") return true;
     try { return window.localStorage.getItem("wispaper-agent-onboarding-v1") !== "done"; } catch { return true; }
   });
   const [onboardingStep, setOnboardingStep] = useState<"discipline" | "need">("discipline");
@@ -1761,6 +1770,7 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
     if (!value) return;
     const from = onboardingInputRef.current?.getBoundingClientRect();
     try { window.localStorage.setItem("wispaper-agent-onboarding-v1", "done"); } catch { /* prototype storage */ }
+    clearOnboardingDemoParams();
     if (skill) flushSync(() => setSelectedSkill(skill));
     const to = landingInputRef.current?.getBoundingClientRect();
     if (from && to) {
@@ -1781,6 +1791,7 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
   };
   const closeOnboarding = () => {
     try { window.localStorage.setItem("wispaper-agent-onboarding-v1", "done"); } catch { /* prototype storage */ }
+    clearOnboardingDemoParams();
     setAutoSubmitIntent(null);
     setOnboardingOpen(false);
   };
