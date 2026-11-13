@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { advanceEnvironment, applyRetention, createEnvironment, finishPreparation, runtime, setExecuting, type Environment, type Retention } from './environment';
 
-export function useSandboxEnvironment(executing: boolean) {
+export function useSandboxEnvironment(executing: boolean, enabled = true) {
   const [environment, setEnvironment] = useState(() => createEnvironment(Date.now(), executing));
   const current = useRef(environment);
   const mounted = useRef(true);
@@ -12,14 +12,16 @@ export function useSandboxEnvironment(executing: boolean) {
   }, []);
   useEffect(() => {
     mounted.current = true;
+    if (!enabled) return () => { mounted.current = false; };
     const tick = () => commit(env => advanceEnvironment(env, Date.now()));
     const timer = window.setInterval(tick, 1000);
     document.addEventListener('visibilitychange', tick);
     return () => { mounted.current = false; clearInterval(timer); document.removeEventListener('visibilitychange', tick); };
-  }, [commit]);
-  useEffect(() => { commit(env => setExecuting(env, executing, Date.now())); }, [executing, commit]);
+  }, [commit, enabled]);
+  useEffect(() => { if (enabled) commit(env => setExecuting(env, executing, Date.now())); }, [executing, commit, enabled]);
 
   const ensureReady = useCallback((): Promise<boolean> => {
+    if (!enabled) return Promise.resolve(false);
     if (preparation.current) return preparation.current;
     commit(env => advanceEnvironment(env, Date.now()));
     if (current.current.status === 'running') {
@@ -33,7 +35,7 @@ export function useSandboxEnvironment(executing: boolean) {
       resolve(mounted.current);
     }, 900));
     return preparation.current;
-  }, [commit]);
+  }, [commit, enabled]);
 
   const setRetention = useCallback((retention: Retention) => {
     commit(env => applyRetention(env, retention, Date.now()));

@@ -7,7 +7,9 @@ import { Sparkles, MoreHorizontal, PanelRight, Share2, Lightbulb, ArrowLeft, Arr
 import "./browser-research.css";
 import { AgentResponse, type ResponseStatus } from "./AgentResponse";
 import "./agent-workspace.css";
-import { AgentTaskNavigation, CommonFunctions, AuxiliaryWorkbench, workbenchTools, WorkbenchView } from "./AgentWorkbench";
+import { AgentTaskNavigation, CommonFunctions, AuxiliaryWorkbench, workbenchTools, WorkbenchView, type WorkbenchDocument } from "./AgentWorkbench";
+import { ownCaseTaskCopy } from "../AgentCasePreview";
+import { agentCaseMarkdown, caseStepTitles, type AgentCase } from "../home-agent-cases";
 
 import { TaskCreditsPopover } from "../sandbox/TaskCreditsPopover";
 import { EnvironmentPopover } from "../sandbox/EnvironmentPopover";
@@ -28,8 +30,9 @@ const storageKey = "wispaper-browser-research-demo-materials";
 type ChatMessage = {role: "user" | "agent"; text: string; status?: ResponseStatus};
 
 type CreditState = "ok" | "low" | "empty";
+type CaseExperience = { item: AgentCase; step: number; view: 'result' | 'process'; onView: (view: 'result' | 'process') => void; onStep: (step: number) => void; onStartOwn: () => void };
 
-export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵感发现", projectContext, userCredits = 50000, creditState = "ok", onRecharge, onUpgrade, onNavigate}: {onBack: () => void; initialTask?: string; initialSkill?: string; projectContext?: {id: string; title: string}; userCredits?: number; creditState?: CreditState; onRecharge?: () => void; onUpgrade?: () => void; onNavigate?: (view: string) => void}) {
+export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵感发现", projectContext, userCredits = 50000, creditState = "ok", onRecharge, onUpgrade, onNavigate, caseExperience}: {onBack: () => void; initialTask?: string; initialSkill?: string; projectContext?: {id: string; title: string}; userCredits?: number; creditState?: CreditState; onRecharge?: () => void; onUpgrade?: () => void; onNavigate?: (view: string) => void; caseExperience?: CaseExperience}) {
   // The task and preview share one simulated browser session. Inspecting a tab
   // does not redirect that session unless the user has taken control.
   const { t } = useLanguage();
@@ -44,6 +47,9 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
   const browserDemo = new URLSearchParams(window.location.search).get("browser") === "demo";
   const [tabsCreated, setTabsCreated] = useState(false);
   const [workbench, setWorkbench] = useState<WorkbenchView>("common");
+  const [activeDocument, setActiveDocument] = useState<string>();
+  const chatScroll = useRef<HTMLDivElement>(null);
+  const guideTitle = useRef<HTMLSpanElement>(null);
   const [panelOpen, setPanelOpen] = useState(true);
   const [attached, setAttached] = useState(false);
   const [composerMenu, setComposerMenu] = useState(false);
@@ -51,17 +57,18 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
   const [lowCreditDismissed, setLowCreditDismissed] = useState(false);
   // Fixed prototype usage records; not a retention rate or a real wallet deduction.
   const [retentionCredits, setRetentionCredits] = useState(12);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialTask ? creditState === "empty" ? [{role:"user", text:initialTask}] : [{role:"user", text:initialTask},{role:"agent",text:initialTask,status:"running"}] : []);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialTask ? creditState === "empty" ? [{role:"user", text:initialTask}] : [{role:"user", text:initialTask},{role:"agent",text:initialTask,status:caseExperience ? "done" : "running"}] : []);
   const responseRunning = chatMessages.some(message => message.status === "running");
   const latestResponse = chatMessages[chatMessages.length - 1];
   const responsePending = latestResponse?.status === "running" || latestResponse?.status === "stopped";
   const updateResponseStatus = async (index: number, status: ResponseStatus) => {
+    if (caseExperience) return;
     if (status === "running" && !(await sandbox.ensureReady())) return;
     setChatMessages(items => items.map((message, i) => i === index ? {...message, status} : message));
   };
   const title = initialTask || '从“NLP与多模态学习探索”生成可执行的研究计划';
-  const selectSkill = (skill: string) => {setActiveSkill(skill);setPrompt(`请帮我进行${skill}，结合当前研究目标与已有材料。`);};
-  const selectBrowserUse = () => { if (busy) return; setActiveSkill("网页执行"); setAttached(false); setComposerMenu(false); openBrowser(); };
+  const selectSkill = (skill: string) => {if(caseExperience) {setNotice('当前为已完成案例，可以查看成果，或开始自己的研究任务。');return;}setActiveSkill(skill);setPrompt(`请帮我进行${skill}，结合当前研究目标与已有材料。`);};
+  const selectBrowserUse = () => { if (caseExperience) {setNotice('案例中的工具记录已保存，无需执行新任务。');return;} if (busy) return; setActiveSkill("网页执行"); setAttached(false); setComposerMenu(false); openBrowser(); };
   const openBrowser = () => {setClientTab(false);setWorkbench("browser");setPanelOpen(true);setFollowPage(true);};
 
   const [phase, setPhase] = useState<Phase>("ready");
@@ -89,11 +96,11 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
   const pickerRef = useRef<HTMLDivElement>(null);
   const saveRef = useRef<HTMLDivElement>(null);
   const browserBusy = ["running", "paused", "takeover", "login", "error"].includes(phase);
-  const sandbox = useSandboxEnvironment(responseRunning || phase === "running");
+  const sandbox = useSandboxEnvironment(responseRunning || phase === "running", !caseExperience);
   const [sandboxDemo] = useState(() => new URLSearchParams(window.location.search).get("sandboxDemo") === "1");
   const busy = browserBusy || responsePending || sandbox.preparing;
   const environmentInactive = sandbox.environment.status === "sleeping" || sandbox.environment.status === "recycled";
-  const composerBusy = sandbox.preparing || (!environmentInactive && busy);
+  const composerBusy = !!caseExperience || sandbox.preparing || (!environmentInactive && busy);
   const submissionRef = useRef(false);
   const changeDemo = (scenario: string) => {
     setChatMessages(items => items.map(message => message.status === "running" ? {...message, status: "stopped"} : message));
@@ -105,21 +112,41 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
   const taskPage = pages.find(p => p.id === activePage)!;
   const completedSteps = phase === "done" ? 3 : step;
   const askStatus = creditState === "empty" ? "等待补充积分" : responseRunning ? "正在生成" : responsePending ? "已暂停" : submitted ? phaseLabels[phase] : chatMessages.length ? "已完成" : "等待开始";
+  // Cases open the completed artifact in the native file viewer; the process is optional.
+  const caseItem = caseExperience?.item;
+  const caseStep = caseExperience?.step;
+  const caseView = caseExperience?.view;
+  const caseDocuments: WorkbenchDocument[] | undefined = caseItem ? [
+    {id:'result',name:caseItem.fileName,title:caseItem.resultTitle,intro:caseItem.resultIntro,sections:caseItem.result,paged:!!caseItem.slides,markdown:agentCaseMarkdown(caseItem),caseItem},
+    {id:'plan',name:'研究计划.md',title:'研究计划',intro:caseItem.brief,sections:caseItem.plan},
+    ...caseItem.sources.map((source,index)=>({id:`source-${index}`,name:source.title,title:source.title,intro:source.detail,sections:[]})),
+  ] : undefined;
+  const openCaseResult = () => {caseExperience?.onView('result');setWorkbench('files');setActiveDocument('result');setPanelOpen(true);};
   useEffect(() => {
+    if (!caseItem || caseStep === undefined) return;
+    const result = caseView === 'result';
+    setWorkbench(result || caseStep !== 1 ? 'files' : 'plan');
+    setActiveDocument(result ? 'result' : caseStep === 1 ? 'plan' : caseStep === 2 ? undefined : 'result');
+    setPanelOpen(true);
+    if (chatScroll.current) chatScroll.current.scrollTop = 0;
+    guideTitle.current?.focus({preventScroll:true});
+  }, [caseItem?.id, caseStep, caseView]);
+  useEffect(() => {
+    if (caseItem) return;
     publishAgent({ id: askTaskId, title, status: askStatus, step: submitted ? stepTitles[Math.min(step, 2)] : responseRunning ? '正在生成研究回答' : responsePending ? '回答生成已暂停' : '研究回答已完成', completed: submitted ? completedSteps : 0, total: submitted ? 3 : 0, blocked: ['login', 'error', 'takeover'].includes(phase) || creditState === 'empty' ? 1 : 0 });
-  }, [publishAgent, askTaskId, title, askStatus, submitted, step, completedSteps, phase, creditState, responseRunning, responsePending]);
+  }, [publishAgent, askTaskId, title, askStatus, submitted, step, completedSteps, phase, creditState, responseRunning, responsePending, caseItem]);
   useEffect(() => () => publishAgent(null), [publishAgent]);
 
   const canOperate = phase === "takeover";
   const currentAction = submitted ? phase === "done" ? "研究材料已整理" : stepTitles[step] : "浏览器页面预览";
-  const taskMemory = useTaskMemory(title, submitted ? phaseLabels[phase] : "研究目标已记录，等待下一步", [...chatMessages].reverse().find(m => m.role === "user")?.text || "", projectContext?.id);
+  const taskMemory = useTaskMemory(title, submitted ? phaseLabels[phase] : "研究目标已记录，等待下一步", [...chatMessages].reverse().find(m => m.role === "user")?.text || "", projectContext?.id, !caseExperience);
   const initialMemoryRequest = useRef(false);
   useEffect(() => {
-    if (initialMemoryRequest.current) return;
+    if (caseExperience || initialMemoryRequest.current) return;
     initialMemoryRequest.current = true;
     const reply = handleMemoryRequest(initialTask, projectContext?.id, taskMemory.id);
     if (reply) setChatMessages([{role:"user",text:initialTask},{role:"agent",text:reply}]);
-  }, [initialTask, projectContext?.id, taskMemory.id]);
+  }, [initialTask, projectContext?.id, taskMemory.id, !!caseExperience]);
   useEffect(() => {
     if (phase !== "done") return;
     const summary = `已核对《Attention Is All You Need》（arXiv:1706.03762）的论文信息与全文入口${selected.includes("code") ? "，并定位 tensor2tensor 官方代码" : ""}。材料保存到项目需用户确认。`;
@@ -137,11 +164,11 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
 
   useEffect(() => { pageScrollRef.current?.scrollTo({top: 0}); }, [displayedPage, articleTab, pageRevision]);
   useEffect(() => {
-    if (!browserDemo) return;
+    if (caseExperience || !browserDemo) return;
     setChatMessages([]);setActiveSkill("网页执行");setAttached(true);setTabsCreated(true);
     setWorkbench("browser");setSubmitted(initialTask || defaultPrompt);
     setPhase("paused");setActivity(["演示已就绪，点击继续执行即可跟踪页面变化"]);
-  }, [browserDemo, initialTask]);
+  }, [browserDemo, initialTask, !!caseExperience]);
 
   useEffect(() => {
     if (phase !== "running") return;
@@ -181,6 +208,7 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
   }, [picker, saveDialog]);
 
   const start = async () => {
+    if (caseExperience) return;
     const query = prompt.trim() || (phase === "stopped" ? submitted : "");
     if (!query || !selected.length || composerBusy || submissionRef.current || creditState === "empty") return;
     submissionRef.current = true;
@@ -221,6 +249,7 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
     } catch { setNotice("浏览器存储不可用，尚未保存，请重试。"); }
   };
   const send = async () => {
+    if (caseExperience) return;
     const query = prompt.trim();
     if (composerBusy || !query || submissionRef.current || creditState === "empty") return;
     submissionRef.current = true;
@@ -242,12 +271,12 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
       setPrompt("");
     } finally { submissionRef.current = false; }
   };
-  return <div className={`agent-task-shell ${tabsCreated ? "aw-has-client-tabs" : ""} ${clientTab ? "aw-client-active" : ""}`}>
+  return <div data-case-experience={caseItem ? caseItem.id : undefined} data-case-view={caseView} className={`agent-task-shell ${tabsCreated ? "aw-has-client-tabs" : ""} ${clientTab ? "aw-client-active" : ""}`}>
     {tabsCreated && <div className="aw-client-tabs" role="tablist" aria-label="客户端标签页"><button role="tab" aria-selected={!clientTab} onClick={()=>setClientTab(false)}><Sparkles size={15}/>Agent · 当前研究</button>{selected.map(id=><button key={id} role="tab" aria-selected={workbench === "browser" && displayedPage===id} onClick={()=>{inspectPage(id);setWorkbench("browser");setPanelOpen(true);}}><Globe2 size={14}/>{pages.find(p=>p.id===id)!.title}<small>{phase==="running" && activePage===id ? "Agent 操作中" : "Agent 标签页"}</small></button>)}</div>}
-    <AgentTaskNavigation onBack={onBack} onNavigate={onNavigate}/><div className={`br-workspace aw-workspace ${workbench === "browser" ? "aw-tracking-browser" : ""} ${panelOpen ? "" : "aw-panel-closed"}`}>
+    <AgentTaskNavigation onBack={onBack} onNavigate={onNavigate} guest={!!caseItem}/><div className={`br-workspace aw-workspace ${workbench === "browser" ? "aw-tracking-browser" : ""} ${panelOpen ? "" : "aw-panel-closed"}`}>
 
     <div className="br-columns">
-      <header className="aw-chat-header"><h1 title={title}>{title}</h1><div className="aw-header-actions"><span className={`br-status br-status-${phase}`} role="status"><i/>{creditState === "empty" ? "等待补充积分" : responseRunning ? "正在生成" : responsePending ? "已暂停" : submitted ? phaseLabels[phase] : chatMessages.length ? "已完成" : "等待开始"}</span><TaskCreditsPopover executionCredits={1250} retentionCredits={retentionCredits} onPreviewRetention={sandboxDemo ? setRetentionCredits : undefined}/><i className="aw-divider"/><button aria-label="复制任务链接" onClick={()=>{navigator.clipboard?.writeText(window.location.href).then(()=>setNotice("原型页面链接已复制"),()=>setNotice("请复制地址栏中的原型链接"));}}><Share2 size={18}/></button><EnvironmentPopover environment={sandbox.environment} onRetention={sandbox.setRetention} demoEnabled={sandboxDemo} onDemo={changeDemo}/><button aria-label="新建研究任务" onClick={onBack}><MoreHorizontal size={19}/></button>{!panelOpen && <button aria-label="展开工作台" onClick={()=>setPanelOpen(true)}><PanelRight size={18}/></button>}</div></header>
+      <header className="aw-chat-header"><h1 title={title}>{title}</h1><div className="aw-header-actions"><span className={`br-status br-status-${phase}`} role="status"><i/>{creditState === "empty" ? "等待补充积分" : responseRunning ? "正在生成" : responsePending ? "已暂停" : submitted ? phaseLabels[phase] : chatMessages.length ? "已完成" : "等待开始"}</span><TaskCreditsPopover note={caseItem ? "本案例仅展示已完成记录，不产生任务执行或云主机保留消耗。" : undefined} executionCredits={caseItem ? 0 : 1250} retentionCredits={caseItem ? 0 : retentionCredits} onPreviewRetention={!caseItem && sandboxDemo ? setRetentionCredits : undefined}/><i className="aw-divider"/><button aria-label="复制任务链接" onClick={()=>{navigator.clipboard?.writeText(window.location.href).then(()=>setNotice("原型页面链接已复制"),()=>setNotice("请复制地址栏中的原型链接"));}}><Share2 size={18}/></button>{!caseItem && <EnvironmentPopover environment={sandbox.environment} onRetention={sandbox.setRetention} demoEnabled={sandboxDemo} onDemo={changeDemo}/>}<button aria-label="新建研究任务" onClick={onBack}><MoreHorizontal size={19}/></button>{!panelOpen && <button aria-label="展开工作台" onClick={()=>setPanelOpen(true)}><PanelRight size={18}/></button>}</div></header>
       {panelOpen && <header className={`aw-workbench-header ${workbench === "browser" ? "aw-browser-control-header" : ""}`}>
         {workbench === "browser" ? <>
           <div className="aw-tracking-heading"><strong>{currentAction}</strong><span role="status"><i className={phase === "running" ? "is-live" : ""}/>{phaseLabels[phase]} · {taskPage.domain}</span></div>
@@ -259,11 +288,11 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
         </> : <><div className="aw-workbench-tabs" role="tablist" aria-label="工作台与 Ask AI"><button role="tab" aria-selected={workbench !== "ask-ai"} onClick={()=>setWorkbench("common")}>工作台</button><button role="tab" aria-selected={workbench === "ask-ai"} onClick={()=>setWorkbench("ask-ai")}>Ask AI</button></div><button aria-label="收起工作台" onClick={()=>setPanelOpen(false)}><PanelRight size={19}/></button></>}
       </header>}
       <section className="br-conversation" aria-label="Agent 研究对话">
-        <div className="br-chat-scroll">
+        <div className="br-chat-scroll" ref={chatScroll}>
           {projectContext && <div className="aw-project-context"><FolderOpen size={15}/><span>当前项目</span><strong>{projectContext.title}</strong></div>}
           {creditState === "empty" && <div className="aw-credit-notice is-empty" role="status"><strong>任务已保留，补充积分后即可启动</strong><p>当前余额为 0 Credits。你的任务内容和项目上下文不会丢失。</p><div><button onClick={onRecharge}>补充积分</button><button className="secondary" onClick={onUpgrade}>查看会员方案</button></div></div>}
           {creditState === "low" && !lowCreditDismissed && <div className="aw-credit-notice" role="status"><strong>当前余额较低</strong><p>剩余 {userCredits.toLocaleString()} Credits，本次任务仍可继续。建议提前补充积分，避免后续步骤中断。</p><div><button onClick={onRecharge}>补充积分</button><button className="secondary" onClick={()=>setLowCreditDismissed(true)}>知道了</button></div></div>}
-          {chatMessages.map((message,index)=><div key={index} className={message.role === "user" ? "br-user-message" : "aw-chat-answer"}>{message.role === "agent" && <div className="br-assistant-label"><span className="br-agent-icon"><Bot size={16}/></span><strong>WisPaper</strong></div>}{message.role === "agent" && message.status ? <AgentResponse task={message.text} status={message.status} onStatusChange={status=>updateResponseStatus(index,status)} canReplay={index === chatMessages.length - 1 && !submitted && !sandbox.preparing}/> : <p>{message.text}</p>}</div>)}
+          {chatMessages.map((message,index)=><div key={index} className={message.role === "user" ? "br-user-message" : "aw-chat-answer"}>{message.role === "agent" && <div className="br-assistant-label"><span className="br-agent-icon"><Bot size={16}/></span><strong>WisPaper</strong></div>}{message.role === "agent" && message.status ? <AgentResponse task={message.text} status={message.status} onStatusChange={status=>updateResponseStatus(index,status)} canReplay={!caseItem && index === chatMessages.length - 1 && !submitted && !sandbox.preparing} casePreview={caseExperience ? {item:caseExperience.item,step:caseExperience.step,view:caseExperience.view,onOpenResult:openCaseResult} : undefined}/> : <p>{message.text}</p>}</div>)}
           {submitted && <>
             <div className="br-user-message">{submitted}<div><Globe2 size={12}/>{selected.length} 个网页 · {permission === "read" ? "仅阅读" : "阅读与操作"}</div></div>
             <div className="br-assistant-label"><span className="br-agent-icon"><Bot size={16}/></span><strong>WisPaper</strong><span>网页研究</span></div>
@@ -290,15 +319,19 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
             {phase === "done" && <div className="br-result"><div className="br-result-heading"><CheckCircle2 size={19}/><strong>{permission === "read" ? "页面阅读完成" : "研究材料已整理"}</strong></div><h3>Attention Is All You Need</h3><p>{permission === "read" ? "论文提出完全基于注意力机制的 Transformer 架构，以自注意力建模序列依赖，替代循环与卷积结构。" : "已核对论文版本，并整理全文入口。代码资源仅在你选择对应网页时纳入。"}</p><div className="br-facts"><span>arXiv:1706.03762</span><span>v7 · 2023.08.02</span></div><button className="br-source-row" onClick={() => {openBrowser(); setActivePage("paper"); setArticleTab("全文");}}><FileText size={16}/><span>论文全文 <small>arxiv.org / PDF</small></span><ArrowUpRight size={15}/></button>{selected.includes("code") && <button className="br-source-row" onClick={() => {openBrowser(); setActivePage("code");}}><Link2 size={16}/><span>代码实现 <small>tensorflow / tensor2tensor</small></span><ArrowUpRight size={15}/></button>}<button className="br-primary br-save" disabled={saved} onClick={() => setSaveDialog(true)}>{saved ? <Check size={16}/> : <FolderOpen size={16}/>} {saved ? `已保存 · ${savedProject}` : "确认并保存到项目"}</button><small className="br-local-note">保存仅写入本地原型，不影响真实知识库。</small></div>}
           </>}
         </div>
-        <div className="br-composer-wrap"><div className="br-composer"><div className="aw-input-line">{activeSkill && (!attached || activeSkill === "网页执行") && <button disabled={composerBusy} className="aw-skill-chip" onClick={()=>{setActiveSkill("");setAttached(false);}} title="移除当前 Skill">{activeSkill === "网页执行" ? <Globe2 size={16}/> : <Lightbulb size={16}/>} {activeSkill}</button>}{attached && activeSkill !== "网页执行" && <button disabled={composerBusy} className="br-context" onClick={openPicker}><Globe2 size={14}/>{selected.length} 个网页<ChevronDown size={13}/></button>}<textarea aria-label="研究任务输入" value={prompt} disabled={composerBusy} onChange={e=>setPrompt(e.target.value)} placeholder={creditState === "empty" ? "补充积分后可继续发送任务" : sandbox.environment.status === "sleeping" ? "输入任意指令，发送后自动唤醒并执行" : sandbox.environment.status === "recycled" ? "输入任意指令，发送后自动创建云主机并执行" : activeSkill === "网页执行" ? "描述你想让 Agent 在网页上完成的任务" : attached ? "输入你想用这些网页完成的任务" : `输入我的${activeSkill || "当前"}的研究`} onKeyDown={e=>{if(e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing){e.preventDefault();send();}}}/></div><div className="br-composer-footer"><div className="aw-composer-actions"><button className="aw-add" aria-label="添加上下文" aria-expanded={composerMenu} disabled={composerBusy} onClick={()=>setComposerMenu(v=>!v)}><Plus size={22}/></button>{composerMenu && <div className="aw-composer-menu"><button onClick={selectBrowserUse}><Globe2 size={16}/>使用网页<span>添加网页执行标签</span></button><button onClick={()=>{setComposerMenu(false);setWorkbench("files");setPanelOpen(true);}}><FolderOpen size={16}/>项目材料<span>查看当前任务文件</span></button></div>}{attached && <><label><ShieldCheck size={13}/><select aria-label="网页操作权限" disabled={composerBusy} value={permission} onChange={e=>setPermission(e.target.value as typeof permission)}><option value="read">仅阅读</option><option value="interact">阅读与操作</option></select></label><button className="aw-detach" disabled={composerBusy} aria-label="移除网页上下文" onClick={()=>{setAttached(false);setActiveSkill("灵感发现");}}><X size={13}/></button></>}</div><button className="br-send" onClick={send} disabled={composerBusy || !prompt.trim() || creditState === "empty"} aria-label="发送研究任务"><>{sandbox.preparing ? <LoaderCircle size={19} className="br-spin"/> : <ArrowUp size={21}/>}</></button></div></div><p className="br-composer-note" role="status">{sandbox.preparing ? "正在准备云主机，就绪后自动执行你的指令…" : environmentInactive ? "发送指令即可自动启动云主机" : "内容由AI生成，请仔细甄别"}</p></div>
+        <div className="br-composer-wrap">{caseExperience && <section className="aw-case-guide" aria-label="案例体验引导">
+          <div className="aw-case-guide-top"><span ref={guideTitle} tabIndex={-1}>{caseView === 'result' ? '成果已就绪，按你的节奏探索' : `${caseExperience.step + 1} / 3 · ${caseStepTitles[caseExperience.step]}`}</span><button className="aw-case-view-toggle" onClick={() => caseView === 'result' ? caseExperience.onView('process') : openCaseResult()}>{caseView === 'result' ? '查看生成过程' : '直接看成果'}<ChevronRight size={13}/></button></div>
+          {caseView === 'process' && <div className="aw-case-process-controls"><span>已完成记录 · 无需等待</span><div><button className="br-icon" disabled={caseExperience.step === 0} aria-label="上一步" onClick={() => caseExperience.onStep(caseExperience.step - 1)}><ArrowLeft size={15}/></button><button className="aw-case-next" onClick={() => caseExperience.onStep(caseExperience.step + 1)}>{caseExperience.step === 2 ? '返回成果' : '下一步'}<ArrowRight size={14}/></button></div></div>}
+          <div className="aw-case-start"><div><strong>换成你的研究主题</strong><small>沿用思路，开始自己的任务</small></div><button className="br-primary" onClick={caseExperience.onStartOwn}>{ownCaseTaskCopy[caseExperience.item.task].action}<ArrowRight size={15}/></button></div>
+        </section>}<div className="br-composer"><div className="aw-input-line">{activeSkill && (!attached || activeSkill === "网页执行") && <button disabled={composerBusy} className="aw-skill-chip" onClick={()=>{setActiveSkill("");setAttached(false);}} title="移除当前 Skill">{activeSkill === "网页执行" ? <Globe2 size={16}/> : <Lightbulb size={16}/>} {activeSkill}</button>}{attached && activeSkill !== "网页执行" && <button disabled={composerBusy} className="br-context" onClick={openPicker}><Globe2 size={14}/>{selected.length} 个网页<ChevronDown size={13}/></button>}<textarea aria-label="研究任务输入" value={prompt} disabled={composerBusy} onChange={e=>setPrompt(e.target.value)} placeholder={caseItem ? "换成你的研究主题，开始自己的任务" : creditState === "empty" ? "补充积分后可继续发送任务" : sandbox.environment.status === "sleeping" ? "输入任意指令，发送后自动唤醒并执行" : sandbox.environment.status === "recycled" ? "输入任意指令，发送后自动创建云主机并执行" : activeSkill === "网页执行" ? "描述你想让 Agent 在网页上完成的任务" : attached ? "输入你想用这些网页完成的任务" : `输入我的${activeSkill || "当前"}的研究`} onKeyDown={e=>{if(e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing){e.preventDefault();send();}}}/></div><div className="br-composer-footer"><div className="aw-composer-actions"><button className="aw-add" aria-label="添加上下文" aria-expanded={composerMenu} disabled={composerBusy} onClick={()=>setComposerMenu(v=>!v)}><Plus size={22}/></button>{composerMenu && <div className="aw-composer-menu"><button onClick={selectBrowserUse}><Globe2 size={16}/>使用网页<span>添加网页执行标签</span></button><button onClick={()=>{setComposerMenu(false);setWorkbench("files");setPanelOpen(true);}}><FolderOpen size={16}/>项目材料<span>查看当前任务文件</span></button></div>}{attached && <><label><ShieldCheck size={13}/><select aria-label="网页操作权限" disabled={composerBusy} value={permission} onChange={e=>setPermission(e.target.value as typeof permission)}><option value="read">仅阅读</option><option value="interact">阅读与操作</option></select></label><button className="aw-detach" disabled={composerBusy} aria-label="移除网页上下文" onClick={()=>{setAttached(false);setActiveSkill("灵感发现");}}><X size={13}/></button></>}</div><button className="br-send" onClick={send} disabled={composerBusy || !prompt.trim() || creditState === "empty"} aria-label="发送研究任务"><>{sandbox.preparing ? <LoaderCircle size={19} className="br-spin"/> : <ArrowUp size={21}/>}</></button></div></div><p className="br-composer-note" role="status">{caseItem ? "免费案例 · 0 积分 · 可随时返回首页" : sandbox.preparing ? "正在准备云主机，就绪后自动执行你的指令…" : environmentInactive ? "发送指令即可自动启动云主机" : "内容由AI生成，请仔细甄别"}</p></div>
       </section>
       {panelOpen && <section className="aw-workbench-body" aria-label="任务工作台">
-      {workbench === "memory" && <TaskMemoryPanel memory={taskMemory} projectContext={projectContext}/>}
+      {workbench === "memory" && !caseItem && <TaskMemoryPanel memory={taskMemory} projectContext={projectContext}/>}
       {workbench === "common" && <CommonFunctions onSelect={title => title === "Ask AI" ? setWorkbench("ask-ai") : selectSkill(title)} onBrowser={selectBrowserUse}/>}
       {workbench === "ask-ai" && <AskAIPanel />}
-      {workbench !== "ask-ai" && workbench !== "memory" && workbench !== "common" && workbench !== "browser" && <AuxiliaryWorkbench view={workbench} savedProject={savedProject} onSelect={selectSkill}/>}
+      {workbench !== "ask-ai" && workbench !== "memory" && workbench !== "common" && workbench !== "browser" && <AuxiliaryWorkbench view={workbench} savedProject={savedProject} onSelect={selectSkill} documents={caseDocuments} activeDocument={activeDocument} onOpenDocument={setActiveDocument}/>}
       <section className="br-browser" aria-label="网页执行预览" hidden={workbench !== "browser"}>
-        <div className="aw-browser-intro"><span><Globe2 size={16}/>{clientTab ? "客户端网页标签页" : "网页执行预览"}</span><button disabled={busy} onClick={openPicker}>{tabsCreated ? "管理任务标签页" : "新建 Agent 标签页"}<Plus size={13}/></button></div>
+        <div className="aw-browser-intro"><span><Globe2 size={16}/>{clientTab ? "客户端网页标签页" : "网页执行预览"}</span><button disabled={busy || !!caseItem} onClick={openPicker}>{tabsCreated ? "管理任务标签页" : "新建 Agent 标签页"}<Plus size={13}/></button></div>
         {!attached && <div className="aw-browser-connect"><p>在客户端新建标签页，交给 Agent 执行网页任务。</p><small>右侧与任务共享模拟页面状态，控制浏览器后可直接操作。此原型不连接真实浏览器。</small></div>}
         <div className="br-demo-bar"><span>交互演示</span><label>场景<select aria-label="体验场景" value={scenario} disabled={busy} onChange={e=>{const value=e.target.value as typeof scenario;setScenario(value);setSelected(value === "login" ? ["paper","code","review"] : ["paper","code"]);reset("paper");}}><option value="normal">正常完成</option><option value="login">需要登录</option><option value="error">页面加载失败</option></select></label></div>
         <div className="br-browser-heading" hidden><span><Globe2 size={16}/><strong>浏览器</strong><small>本机工作区</small></span><button onClick={openPicker} disabled={busy} className="br-icon" aria-label="选择网页"><Plus size={17}/></button></div>
@@ -317,7 +350,7 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
           {phase === "error" ? <div className="br-page-empty"><Globe2 size={34}/><h2>网页未能加载</h2><p>模拟网络连接中断，已完成的结果不会丢失。</p><button className="br-primary" onClick={async () => {if (!(await sandbox.ensureReady())) return; setRecovered(true); setPhase("running");}}>重新加载并继续</button></div> : displayedPage === "review" ? <div className="br-page-empty"><LockKeyhole size={34}/><h2>{loggedIn ? "机构访问已就绪" : "通过机构访问全文"}</h2><p>{loggedIn ? "现在可以继续获取文献材料。" : "本示例用于体验登录中断与恢复流程。"}</p>{!loggedIn && <button className="br-primary" disabled={phase !== "login" && !canOperate} onClick={async () => {if (!(await sandbox.ensureReady())) return; setLoggedIn(true); if (phase === "login") {setPhase("running"); setActivity(items => [...items, "用户完成演示登录，继续读取"]);} else setNotice("演示登录已完成");}}>模拟登录完成{phase === "login" ? "并继续" : ""}</button>}<small>无需输入真实凭据</small></div> : displayedPage === "code" ? <div className="br-code-page"><div className="br-code-top"><span className="br-favicon code">⌘</span><strong>GitHub</strong><span>示例预览</span></div><p className="br-repo-name">tensorflow <span>/</span> <strong>tensor2tensor</strong><small>Public</small></p><div className="br-repo-nav">〈〉 Code <span>Issues</span><span>Pull requests</span></div><div className="br-repo-file"><FolderOpen size={15}/> tensor2tensor <small>模型与训练工具</small></div><div className="br-repo-file"><FileText size={15}/> README.md <small>项目说明</small></div><article><span className="br-eyebrow">README.md</span><h2>Tensor2Tensor</h2><p>A library of deep learning models and datasets designed to make deep learning more accessible and accelerate ML research.</p><h3>Transformer</h3><p>Implementation resources for “Attention Is All You Need”.</p><div className="br-code-snippet">tensor2tensor/models/transformer.py</div><p className="br-page-note">该页面为研究资源示例。复现前需核对原仓库版本、依赖与维护状态。</p></article></div> : <div className="br-paper-page"><div className="br-paper-top"><span>ar<span>χ</span>iv</span><span>Computer Science</span></div><div className="br-paper-search"><Search size={15}/><input aria-label="示例网页搜索" value={search} disabled={!canOperate} onChange={e => setSearch(e.target.value)} placeholder="Search papers…"/><button disabled={!canOperate || !search.trim()} onClick={() => setNotice(`示例页面已接收检索词“${search}”；此原型不发起真实搜索。`)}>搜索</button></div><div className="br-paper-body"><p className="br-breadcrumb">Computer Science <ChevronRight size={11}/> Computation and Language</p><div className="br-paper-meta">arXiv:1706.03762 <span>[cs.CL]</span></div><h2>Attention Is All You Need</h2><p className="br-authors">Ashish Vaswani, Noam Shazeer, Niki Parmar,<br/>Jakob Uszkoreit, Llion Jones, Aidan N. Gomez,<br/>Lukasz Kaiser, Illia Polosukhin</p><p className="br-version">Submitted 12 Jun 2017 · Revised 2 Aug 2023 (v7)</p><div className="br-article-tabs">{["摘要", "全文", "版本记录"].map(t => <button key={t} className={articleTab === t ? "selected" : ""} disabled={!canOperate} onClick={() => setArticleTab(t)}>{t}</button>)}</div>{articleTab === "摘要" ? <><h3>Abstract</h3><p className="br-abstract">The dominant sequence transduction models are based on complex recurrent or convolutional neural networks in an encoder-decoder configuration. We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely.</p><div className={`br-highlight ${phase === "running" && step === 0 ? "scanning" : ""}`}><span><FileText size={15}/>研究线索</span><p>Transformer · Self-attention · Sequence modeling</p><small>可整理为当前研究项目的文献材料</small></div></> : articleTab === "全文" ? <div className="br-fulltext"><FileText size={28}/><h3>Attention Is All You Need.pdf</h3><p>15 pages · v7 · arXiv</p><a href="https://arxiv.org/pdf/1706.03762" target="_blank" rel="noreferrer">打开真实 PDF <ExternalLink size={14}/></a></div> : <div className="br-history"><p><strong>v7</strong> 2 Aug 2023 <span>当前版本</span></p><p><strong>v6</strong> 24 Jul 2023</p><p><strong>v1</strong> 12 Jun 2017</p></div>}<div className="br-paper-links"><button disabled={!canOperate} onClick={() => setArticleTab("全文")}><FileText size={15}/>View PDF<ArrowUpRight size={14}/></button>{selected.includes("code") && <button disabled={!canOperate} onClick={() => {openBrowser(); setActivePage("code");}}><Link2 size={15}/>Code<ArrowUpRight size={14}/></button>}</div></div></div>}
         </div><div className="br-browser-bottom"><span><ShieldCheck size={13}/>{permission === "read" ? "Agent 仅阅读" : "Agent 可阅读与操作"} · 限所选网页</span><button onClick={() => setShowSources(v => !v)}>来源记录<ChevronDown size={13}/></button></div>{showSources && <div className="br-sources"><strong>本轮所选来源 · 演示</strong>{selected.map(id => <p key={id}>{pages.find(p => p.id === id)!.url}</p>)}<small>此列表记录页面范围，不代表发生了真实网络访问。</small></div>}
       </section>
-      <nav className="aw-tool-rail" aria-label="工作台工具">{workbenchTools.map(({id,label,icon:Icon})=><button key={id} aria-label={id === 'memory' ? t('agentPreferences.title') : label} title={id === 'memory' ? t('agentPreferences.title') : label} aria-pressed={workbench === id} onClick={()=>{setWorkbench(id);setPanelOpen(true);}}><Icon size={22}/>{id === "browser" && busy && <i/>}</button>)}</nav>
+      <nav className="aw-tool-rail" aria-label="工作台工具">{workbenchTools.filter(tool => !caseItem || tool.id !== 'memory').map(({id,label,icon:Icon})=><button key={id} aria-label={id === 'memory' ? t('agentPreferences.title') : label} title={id === 'memory' ? t('agentPreferences.title') : label} aria-pressed={workbench === id} onClick={()=>{setWorkbench(id);setPanelOpen(true);if(caseItem) setActiveDocument(id === 'plan' ? 'plan' : undefined);}}><Icon size={22}/>{id === "browser" && busy && <i/>}</button>)}</nav>
       </section>}
     </div>
     {notice && <div className="br-toast" role="status"><CheckCircle2 size={16}/>{notice}</div>}

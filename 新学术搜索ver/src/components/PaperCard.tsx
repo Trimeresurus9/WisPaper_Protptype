@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ExternalLink, BookmarkPlus, ThumbsUp, ThumbsDown, MessageSquare, MoreHorizontal, Quote } from 'lucide-react';
+import { ExternalLink, BookmarkPlus, ThumbsUp, ThumbsDown, MessageSquare, MoreHorizontal, Quote, Check, CircleDashed } from 'lucide-react';
 import { Paper } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 
@@ -66,11 +66,9 @@ export function PaperCard({ paper, isSelected, onSelect }: PaperCardProps) {
             <h3 className="flex-1 text-sm font-semibold text-blue-600 leading-snug hover:underline cursor-pointer">
               <button type="button" className="text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500" onClick={event => { event.stopPropagation(); onSelect(); }}>{paper.title}</button>
             </h3>
-            <div className="flex items-center gap-1 flex-shrink-0">
-              <svg className="w-3.5 h-3.5 text-blue-600" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-              </svg>
-              <span className="text-blue-600 text-xs font-medium">Perfect</span>
+            <div className={`flex items-center gap-1 flex-shrink-0 ${paper.relevance === 'Partial' ? 'text-gray-500' : 'text-blue-600'}`} title={paper.relevanceReason}>
+              {paper.relevance === 'Partial' ? <CircleDashed className="w-3.5 h-3.5"/> : <Check className="w-3.5 h-3.5"/>}
+              <span className="text-xs font-medium">{paper.relevance ?? 'Perfect'}</span>
             </div>
           </div>
 
@@ -108,12 +106,12 @@ export function PaperCard({ paper, isSelected, onSelect }: PaperCardProps) {
                     <Quote className="w-3.5 h-3.5" />
                     Cite
                   </button>
-                  <span className="text-xs text-gray-600">Cited By: {paper.citations}</span>
+                  {!paper.isSearchExample && <span className="text-xs text-gray-600">Cited By: {paper.citations}</span>}
                 </>
               )}
-              <a href="#" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium transition-colors">
+              <a href={paper.isSearchExample ? `https://arxiv.org/abs/${paper.arxivId}` : '#'} target={paper.isSearchExample ? '_blank' : undefined} rel={paper.isSearchExample ? 'noreferrer' : undefined} onClick={event => { if (paper.isSearchExample) event.stopPropagation(); }} className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium transition-colors">
                 <ExternalLink className="w-3.5 h-3.5" />
-                馆藏链接
+                {paper.isSearchExample ? '原文' : '馆藏链接'}
               </a>
             </div>
             
