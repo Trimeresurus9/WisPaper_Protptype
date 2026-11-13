@@ -5,6 +5,7 @@ import { TaskMemoryPanel, useTaskMemory } from "../agent-memory/TaskMemoryPanel"
 import React, { useEffect, useRef, useState } from "react";
 import { Sparkles, MoreHorizontal, PanelRight, Share2, Lightbulb, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BookOpen, Bot, Check, CheckCircle2, ChevronDown, ChevronRight, Circle, ExternalLink, FileText, FolderOpen, Globe2, Hand, Link2, LoaderCircle, LockKeyhole, MousePointer2, Pause, Play, Plus, RotateCcw, Search, ShieldCheck, Square, X } from "lucide-react";
 import "./browser-research.css";
+import { AgentLoginCard } from "../AgentLoginCard";
 import { AgentResponse, type ResponseStatus } from "./AgentResponse";
 import "./agent-workspace.css";
 import { AgentTaskNavigation, CommonFunctions, AuxiliaryWorkbench, workbenchTools, WorkbenchView, type WorkbenchDocument } from "./AgentWorkbench";
@@ -32,7 +33,8 @@ type ChatMessage = {role: "user" | "agent"; text: string; status?: ResponseStatu
 type CreditState = "ok" | "low" | "empty";
 type CaseExperience = { item: AgentCase; step: number; view: 'result' | 'process'; onView: (view: 'result' | 'process') => void; onStep: (step: number) => void; onStartOwn: () => void };
 
-export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵感发现", projectContext, userCredits = 50000, creditState = "ok", onRecharge, onUpgrade, onNavigate, caseExperience}: {onBack: () => void; initialTask?: string; initialSkill?: string; projectContext?: {id: string; title: string}; userCredits?: number; creditState?: CreditState; onRecharge?: () => void; onUpgrade?: () => void; onNavigate?: (view: string) => void; caseExperience?: CaseExperience}) {
+export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵感发现", projectContext, userCredits = 50000, creditState = "ok", onRecharge, onUpgrade, onNavigate, caseExperience, guestLogin}: {onBack: () => void; initialTask?: string; initialSkill?: string; projectContext?: {id: string; title: string}; userCredits?: number; creditState?: CreditState; onRecharge?: () => void; onUpgrade?: () => void; onNavigate?: (view: string) => void; caseExperience?: CaseExperience; guestLogin?: { onComplete: () => void; onEdit: () => void }}) {
+  const guestMode = !!guestLogin;
   // The task and preview share one simulated browser session. Inspecting a tab
   // does not redirect that session unless the user has taken control.
   const { t } = useLanguage();
@@ -50,25 +52,25 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
   const [activeDocument, setActiveDocument] = useState<string>();
   const chatScroll = useRef<HTMLDivElement>(null);
   const guideTitle = useRef<HTMLSpanElement>(null);
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(!guestMode);
   const [attached, setAttached] = useState(false);
   const [composerMenu, setComposerMenu] = useState(false);
   const [activeSkill, setActiveSkill] = useState(initialSkill);
   const [lowCreditDismissed, setLowCreditDismissed] = useState(false);
   // Fixed prototype usage records; not a retention rate or a real wallet deduction.
   const [retentionCredits, setRetentionCredits] = useState(12);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialTask ? creditState === "empty" ? [{role:"user", text:initialTask}] : [{role:"user", text:initialTask},{role:"agent",text:initialTask,status:caseExperience ? "done" : "running"}] : []);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialTask ? guestMode || creditState === "empty" ? [{role:"user", text:initialTask}] : [{role:"user", text:initialTask},{role:"agent",text:initialTask,status:caseExperience ? "done" : "running"}] : []);
   const responseRunning = chatMessages.some(message => message.status === "running");
   const latestResponse = chatMessages[chatMessages.length - 1];
   const responsePending = latestResponse?.status === "running" || latestResponse?.status === "stopped";
   const updateResponseStatus = async (index: number, status: ResponseStatus) => {
-    if (caseExperience) return;
+    if (caseExperience || guestMode) return;
     if (status === "running" && !(await sandbox.ensureReady())) return;
     setChatMessages(items => items.map((message, i) => i === index ? {...message, status} : message));
   };
   const title = initialTask || '从“NLP与多模态学习探索”生成可执行的研究计划';
-  const selectSkill = (skill: string) => {if(caseExperience) {setNotice('当前为已完成案例，可以查看成果，或开始自己的研究任务。');return;}setActiveSkill(skill);setPrompt(`请帮我进行${skill}，结合当前研究目标与已有材料。`);};
-  const selectBrowserUse = () => { if (caseExperience) {setNotice('案例中的工具记录已保存，无需执行新任务。');return;} if (busy) return; setActiveSkill("网页执行"); setAttached(false); setComposerMenu(false); openBrowser(); };
+  const selectSkill = (skill: string) => {if (guestMode) return; if(caseExperience) {setNotice('当前为已完成案例，可以查看成果，或开始自己的研究任务。');return;}setActiveSkill(skill);setPrompt(`请帮我进行${skill}，结合当前研究目标与已有材料。`);};
+  const selectBrowserUse = () => { if (guestMode) return; if (caseExperience) {setNotice('案例中的工具记录已保存，无需执行新任务。');return;} if (busy) return; setActiveSkill("网页执行"); setAttached(false); setComposerMenu(false); openBrowser(); };
   const openBrowser = () => {setClientTab(false);setWorkbench("browser");setPanelOpen(true);setFollowPage(true);};
 
   const [phase, setPhase] = useState<Phase>("ready");
@@ -96,11 +98,11 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
   const pickerRef = useRef<HTMLDivElement>(null);
   const saveRef = useRef<HTMLDivElement>(null);
   const browserBusy = ["running", "paused", "takeover", "login", "error"].includes(phase);
-  const sandbox = useSandboxEnvironment(responseRunning || phase === "running", !caseExperience);
+  const sandbox = useSandboxEnvironment(responseRunning || phase === "running", !caseExperience && !guestMode);
   const [sandboxDemo] = useState(() => new URLSearchParams(window.location.search).get("sandboxDemo") === "1");
   const busy = browserBusy || responsePending || sandbox.preparing;
   const environmentInactive = sandbox.environment.status === "sleeping" || sandbox.environment.status === "recycled";
-  const composerBusy = !!caseExperience || sandbox.preparing || (!environmentInactive && busy);
+  const composerBusy = guestMode || !!caseExperience || sandbox.preparing || (!environmentInactive && busy);
   const submissionRef = useRef(false);
   const changeDemo = (scenario: string) => {
     setChatMessages(items => items.map(message => message.status === "running" ? {...message, status: "stopped"} : message));
@@ -132,21 +134,21 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
     guideTitle.current?.focus({preventScroll:true});
   }, [caseItem?.id, caseStep, caseView]);
   useEffect(() => {
-    if (caseItem) return;
+    if (caseItem || guestMode) return;
     publishAgent({ id: askTaskId, title, status: askStatus, step: submitted ? stepTitles[Math.min(step, 2)] : responseRunning ? '正在生成研究回答' : responsePending ? '回答生成已暂停' : '研究回答已完成', completed: submitted ? completedSteps : 0, total: submitted ? 3 : 0, blocked: ['login', 'error', 'takeover'].includes(phase) || creditState === 'empty' ? 1 : 0 });
-  }, [publishAgent, askTaskId, title, askStatus, submitted, step, completedSteps, phase, creditState, responseRunning, responsePending, caseItem]);
+  }, [publishAgent, askTaskId, title, askStatus, submitted, step, completedSteps, phase, creditState, responseRunning, responsePending, caseItem, guestMode]);
   useEffect(() => () => publishAgent(null), [publishAgent]);
 
   const canOperate = phase === "takeover";
   const currentAction = submitted ? phase === "done" ? "研究材料已整理" : stepTitles[step] : "浏览器页面预览";
-  const taskMemory = useTaskMemory(title, submitted ? phaseLabels[phase] : "研究目标已记录，等待下一步", [...chatMessages].reverse().find(m => m.role === "user")?.text || "", projectContext?.id, !caseExperience);
+  const taskMemory = useTaskMemory(title, submitted ? phaseLabels[phase] : "研究目标已记录，等待下一步", [...chatMessages].reverse().find(m => m.role === "user")?.text || "", projectContext?.id, !caseExperience && !guestMode);
   const initialMemoryRequest = useRef(false);
   useEffect(() => {
-    if (caseExperience || initialMemoryRequest.current) return;
+    if (caseExperience || guestMode || initialMemoryRequest.current) return;
     initialMemoryRequest.current = true;
     const reply = handleMemoryRequest(initialTask, projectContext?.id, taskMemory.id);
     if (reply) setChatMessages([{role:"user",text:initialTask},{role:"agent",text:reply}]);
-  }, [initialTask, projectContext?.id, taskMemory.id, !!caseExperience]);
+  }, [initialTask, projectContext?.id, taskMemory.id, !!caseExperience, guestMode]);
   useEffect(() => {
     if (phase !== "done") return;
     const summary = `已核对《Attention Is All You Need》（arXiv:1706.03762）的论文信息与全文入口${selected.includes("code") ? "，并定位 tensor2tensor 官方代码" : ""}。材料保存到项目需用户确认。`;
@@ -164,11 +166,11 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
 
   useEffect(() => { pageScrollRef.current?.scrollTo({top: 0}); }, [displayedPage, articleTab, pageRevision]);
   useEffect(() => {
-    if (caseExperience || !browserDemo) return;
+    if (caseExperience || guestMode || !browserDemo) return;
     setChatMessages([]);setActiveSkill("网页执行");setAttached(true);setTabsCreated(true);
     setWorkbench("browser");setSubmitted(initialTask || defaultPrompt);
     setPhase("paused");setActivity(["演示已就绪，点击继续执行即可跟踪页面变化"]);
-  }, [browserDemo, initialTask, !!caseExperience]);
+  }, [browserDemo, initialTask, !!caseExperience, guestMode]);
 
   useEffect(() => {
     if (phase !== "running") return;
@@ -208,7 +210,7 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
   }, [picker, saveDialog]);
 
   const start = async () => {
-    if (caseExperience) return;
+    if (caseExperience || guestMode) return;
     const query = prompt.trim() || (phase === "stopped" ? submitted : "");
     if (!query || !selected.length || composerBusy || submissionRef.current || creditState === "empty") return;
     submissionRef.current = true;
@@ -249,7 +251,7 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
     } catch { setNotice("浏览器存储不可用，尚未保存，请重试。"); }
   };
   const send = async () => {
-    if (caseExperience) return;
+    if (caseExperience || guestMode) return;
     const query = prompt.trim();
     if (composerBusy || !query || submissionRef.current || creditState === "empty") return;
     submissionRef.current = true;
@@ -271,12 +273,12 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
       setPrompt("");
     } finally { submissionRef.current = false; }
   };
-  return <div data-case-experience={caseItem ? caseItem.id : undefined} data-case-view={caseView} className={`agent-task-shell ${tabsCreated ? "aw-has-client-tabs" : ""} ${clientTab ? "aw-client-active" : ""}`}>
+  return <div data-guest-login={guestMode || undefined} data-case-experience={caseItem ? caseItem.id : undefined} data-case-view={caseView} className={`agent-task-shell ${tabsCreated ? "aw-has-client-tabs" : ""} ${clientTab ? "aw-client-active" : ""}`}>
     {tabsCreated && <div className="aw-client-tabs" role="tablist" aria-label="客户端标签页"><button role="tab" aria-selected={!clientTab} onClick={()=>setClientTab(false)}><Sparkles size={15}/>Agent · 当前研究</button>{selected.map(id=><button key={id} role="tab" aria-selected={workbench === "browser" && displayedPage===id} onClick={()=>{inspectPage(id);setWorkbench("browser");setPanelOpen(true);}}><Globe2 size={14}/>{pages.find(p=>p.id===id)!.title}<small>{phase==="running" && activePage===id ? "Agent 操作中" : "Agent 标签页"}</small></button>)}</div>}
-    <AgentTaskNavigation onBack={onBack} onNavigate={onNavigate} guest={!!caseItem}/><div className={`br-workspace aw-workspace ${workbench === "browser" ? "aw-tracking-browser" : ""} ${panelOpen ? "" : "aw-panel-closed"}`}>
+    <AgentTaskNavigation onBack={onBack} onNavigate={onNavigate} guest={!!caseItem || guestMode}/><div className={`br-workspace aw-workspace ${workbench === "browser" ? "aw-tracking-browser" : ""} ${panelOpen ? "" : "aw-panel-closed"}`}>
 
     <div className="br-columns">
-      <header className="aw-chat-header"><h1 title={title}>{title}</h1><div className="aw-header-actions"><span className={`br-status br-status-${phase}`} role="status"><i/>{creditState === "empty" ? "等待补充积分" : responseRunning ? "正在生成" : responsePending ? "已暂停" : submitted ? phaseLabels[phase] : chatMessages.length ? "已完成" : "等待开始"}</span><TaskCreditsPopover note={caseItem ? "本案例仅展示已完成记录，不产生任务执行或云主机保留消耗。" : undefined} executionCredits={caseItem ? 0 : 1250} retentionCredits={caseItem ? 0 : retentionCredits} onPreviewRetention={!caseItem && sandboxDemo ? setRetentionCredits : undefined}/><i className="aw-divider"/><button aria-label="复制任务链接" onClick={()=>{navigator.clipboard?.writeText(window.location.href).then(()=>setNotice("原型页面链接已复制"),()=>setNotice("请复制地址栏中的原型链接"));}}><Share2 size={18}/></button>{!caseItem && <EnvironmentPopover environment={sandbox.environment} onRetention={sandbox.setRetention} demoEnabled={sandboxDemo} onDemo={changeDemo}/>}<button aria-label="新建研究任务" onClick={onBack}><MoreHorizontal size={19}/></button>{!panelOpen && <button aria-label="展开工作台" onClick={()=>setPanelOpen(true)}><PanelRight size={18}/></button>}</div></header>
+      <header className="aw-chat-header"><h1 title={title}>{title}</h1><div className="aw-header-actions"><span className={`br-status br-status-${phase}`} role="status"><i/>{guestMode ? "等待登录" : creditState === "empty" ? "等待补充积分" : responseRunning ? "正在生成" : responsePending ? "已暂停" : submitted ? phaseLabels[phase] : chatMessages.length ? "已完成" : "等待开始"}</span><TaskCreditsPopover note={guestMode ? "登录前不会执行任务或消耗 Credits。" : caseItem ? "本案例仅展示已完成记录，不产生任务执行或云主机保留消耗。" : undefined} executionCredits={caseItem || guestMode ? 0 : 1250} retentionCredits={caseItem || guestMode ? 0 : retentionCredits} onPreviewRetention={!caseItem && !guestMode && sandboxDemo ? setRetentionCredits : undefined}/><i className="aw-divider"/><button aria-label="复制任务链接" onClick={()=>{navigator.clipboard?.writeText(window.location.href).then(()=>setNotice("原型页面链接已复制"),()=>setNotice("请复制地址栏中的原型链接"));}}><Share2 size={18}/></button>{!caseItem && !guestMode && <EnvironmentPopover environment={sandbox.environment} onRetention={sandbox.setRetention} demoEnabled={sandboxDemo} onDemo={changeDemo}/>}<button aria-label="新建研究任务" onClick={onBack}><MoreHorizontal size={19}/></button>{!panelOpen && <button aria-label="展开工作台" onClick={()=>setPanelOpen(true)}><PanelRight size={18}/></button>}</div></header>
       {panelOpen && <header className={`aw-workbench-header ${workbench === "browser" ? "aw-browser-control-header" : ""}`}>
         {workbench === "browser" ? <>
           <div className="aw-tracking-heading"><strong>{currentAction}</strong><span role="status"><i className={phase === "running" ? "is-live" : ""}/>{phaseLabels[phase]} · {taskPage.domain}</span></div>
@@ -290,9 +292,10 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
       <section className="br-conversation" aria-label="Agent 研究对话">
         <div className="br-chat-scroll" ref={chatScroll}>
           {projectContext && <div className="aw-project-context"><FolderOpen size={15}/><span>当前项目</span><strong>{projectContext.title}</strong></div>}
-          {creditState === "empty" && <div className="aw-credit-notice is-empty" role="status"><strong>任务已保留，补充积分后即可启动</strong><p>当前余额为 0 Credits。你的任务内容和项目上下文不会丢失。</p><div><button onClick={onRecharge}>补充积分</button><button className="secondary" onClick={onUpgrade}>查看会员方案</button></div></div>}
-          {creditState === "low" && !lowCreditDismissed && <div className="aw-credit-notice" role="status"><strong>当前余额较低</strong><p>剩余 {userCredits.toLocaleString()} Credits，本次任务仍可继续。建议提前补充积分，避免后续步骤中断。</p><div><button onClick={onRecharge}>补充积分</button><button className="secondary" onClick={()=>setLowCreditDismissed(true)}>知道了</button></div></div>}
+          {!guestMode && creditState === "empty" && <div className="aw-credit-notice is-empty" role="status"><strong>任务已保留，补充积分后即可启动</strong><p>当前余额为 0 Credits。你的任务内容和项目上下文不会丢失。</p><div><button onClick={onRecharge}>补充积分</button><button className="secondary" onClick={onUpgrade}>查看会员方案</button></div></div>}
+          {!guestMode && creditState === "low" && !lowCreditDismissed && <div className="aw-credit-notice" role="status"><strong>当前余额较低</strong><p>剩余 {userCredits.toLocaleString()} Credits，本次任务仍可继续。建议提前补充积分，避免后续步骤中断。</p><div><button onClick={onRecharge}>补充积分</button><button className="secondary" onClick={()=>setLowCreditDismissed(true)}>知道了</button></div></div>}
           {chatMessages.map((message,index)=><div key={index} className={message.role === "user" ? "br-user-message" : "aw-chat-answer"}>{message.role === "agent" && <div className="br-assistant-label"><span className="br-agent-icon"><Bot size={16}/></span><strong>WisPaper</strong></div>}{message.role === "agent" && message.status ? <AgentResponse task={message.text} status={message.status} onStatusChange={status=>updateResponseStatus(index,status)} canReplay={!caseItem && index === chatMessages.length - 1 && !submitted && !sandbox.preparing} casePreview={caseExperience ? {item:caseExperience.item,step:caseExperience.step,view:caseExperience.view,onOpenResult:openCaseResult} : undefined}/> : <p>{message.text}</p>}</div>)}
+          {guestLogin && <div className="agl-assistant"><div className="br-assistant-label"><span className="br-agent-icon"><Bot size={16}/></span><strong>WisPaper</strong></div><AgentLoginCard onComplete={guestLogin.onComplete} onEdit={guestLogin.onEdit}/></div>}
           {submitted && <>
             <div className="br-user-message">{submitted}<div><Globe2 size={12}/>{selected.length} 个网页 · {permission === "read" ? "仅阅读" : "阅读与操作"}</div></div>
             <div className="br-assistant-label"><span className="br-agent-icon"><Bot size={16}/></span><strong>WisPaper</strong><span>网页研究</span></div>
@@ -323,7 +326,7 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
           <div className="aw-case-guide-top"><span ref={guideTitle} tabIndex={-1}>{caseView === 'result' ? '成果已就绪，按你的节奏探索' : `${caseExperience.step + 1} / 3 · ${caseStepTitles[caseExperience.step]}`}</span><button className="aw-case-view-toggle" onClick={() => caseView === 'result' ? caseExperience.onView('process') : openCaseResult()}>{caseView === 'result' ? '查看生成过程' : '直接看成果'}<ChevronRight size={13}/></button></div>
           {caseView === 'process' && <div className="aw-case-process-controls"><span>已完成记录 · 无需等待</span><div><button className="br-icon" disabled={caseExperience.step === 0} aria-label="上一步" onClick={() => caseExperience.onStep(caseExperience.step - 1)}><ArrowLeft size={15}/></button><button className="aw-case-next" onClick={() => caseExperience.onStep(caseExperience.step + 1)}>{caseExperience.step === 2 ? '返回成果' : '下一步'}<ArrowRight size={14}/></button></div></div>}
           <div className="aw-case-start"><div><strong>换成你的研究主题</strong><small>沿用思路，开始自己的任务</small></div><button className="br-primary" onClick={caseExperience.onStartOwn}>{ownCaseTaskCopy[caseExperience.item.task].action}<ArrowRight size={15}/></button></div>
-        </section>}<div className="br-composer"><div className="aw-input-line">{activeSkill && (!attached || activeSkill === "网页执行") && <button disabled={composerBusy} className="aw-skill-chip" onClick={()=>{setActiveSkill("");setAttached(false);}} title="移除当前 Skill">{activeSkill === "网页执行" ? <Globe2 size={16}/> : <Lightbulb size={16}/>} {activeSkill}</button>}{attached && activeSkill !== "网页执行" && <button disabled={composerBusy} className="br-context" onClick={openPicker}><Globe2 size={14}/>{selected.length} 个网页<ChevronDown size={13}/></button>}<textarea aria-label="研究任务输入" value={prompt} disabled={composerBusy} onChange={e=>setPrompt(e.target.value)} placeholder={caseItem ? "换成你的研究主题，开始自己的任务" : creditState === "empty" ? "补充积分后可继续发送任务" : sandbox.environment.status === "sleeping" ? "输入任意指令，发送后自动唤醒并执行" : sandbox.environment.status === "recycled" ? "输入任意指令，发送后自动创建云主机并执行" : activeSkill === "网页执行" ? "描述你想让 Agent 在网页上完成的任务" : attached ? "输入你想用这些网页完成的任务" : `输入我的${activeSkill || "当前"}的研究`} onKeyDown={e=>{if(e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing){e.preventDefault();send();}}}/></div><div className="br-composer-footer"><div className="aw-composer-actions"><button className="aw-add" aria-label="添加上下文" aria-expanded={composerMenu} disabled={composerBusy} onClick={()=>setComposerMenu(v=>!v)}><Plus size={22}/></button>{composerMenu && <div className="aw-composer-menu"><button onClick={selectBrowserUse}><Globe2 size={16}/>使用网页<span>添加网页执行标签</span></button><button onClick={()=>{setComposerMenu(false);setWorkbench("files");setPanelOpen(true);}}><FolderOpen size={16}/>项目材料<span>查看当前任务文件</span></button></div>}{attached && <><label><ShieldCheck size={13}/><select aria-label="网页操作权限" disabled={composerBusy} value={permission} onChange={e=>setPermission(e.target.value as typeof permission)}><option value="read">仅阅读</option><option value="interact">阅读与操作</option></select></label><button className="aw-detach" disabled={composerBusy} aria-label="移除网页上下文" onClick={()=>{setAttached(false);setActiveSkill("灵感发现");}}><X size={13}/></button></>}</div><button className="br-send" onClick={send} disabled={composerBusy || !prompt.trim() || creditState === "empty"} aria-label="发送研究任务"><>{sandbox.preparing ? <LoaderCircle size={19} className="br-spin"/> : <ArrowUp size={21}/>}</></button></div></div><p className="br-composer-note" role="status">{caseItem ? "免费案例 · 0 积分 · 可随时返回首页" : sandbox.preparing ? "正在准备云主机，就绪后自动执行你的指令…" : environmentInactive ? "发送指令即可自动启动云主机" : "内容由AI生成，请仔细甄别"}</p></div>
+        </section>}<div className="br-composer"><div className="aw-input-line">{activeSkill && (!attached || activeSkill === "网页执行") && <button disabled={composerBusy} className="aw-skill-chip" onClick={()=>{setActiveSkill("");setAttached(false);}} title="移除当前 Skill">{activeSkill === "网页执行" ? <Globe2 size={16}/> : <Lightbulb size={16}/>} {activeSkill}</button>}{attached && activeSkill !== "网页执行" && <button disabled={composerBusy} className="br-context" onClick={openPicker}><Globe2 size={14}/>{selected.length} 个网页<ChevronDown size={13}/></button>}<textarea aria-label="研究任务输入" value={prompt} disabled={composerBusy} onChange={e=>setPrompt(e.target.value)} placeholder={guestMode ? "登录后，继续追问或补充研究需求" : caseItem ? "换成你的研究主题，开始自己的任务" : creditState === "empty" ? "补充积分后可继续发送任务" : sandbox.environment.status === "sleeping" ? "输入任意指令，发送后自动唤醒并执行" : sandbox.environment.status === "recycled" ? "输入任意指令，发送后自动创建云主机并执行" : activeSkill === "网页执行" ? "描述你想让 Agent 在网页上完成的任务" : attached ? "输入你想用这些网页完成的任务" : `输入我的${activeSkill || "当前"}的研究`} onKeyDown={e=>{if(e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing){e.preventDefault();send();}}}/></div><div className="br-composer-footer"><div className="aw-composer-actions"><button className="aw-add" aria-label="添加上下文" aria-expanded={composerMenu} disabled={composerBusy} onClick={()=>setComposerMenu(v=>!v)}><Plus size={22}/></button>{composerMenu && <div className="aw-composer-menu"><button onClick={selectBrowserUse}><Globe2 size={16}/>使用网页<span>添加网页执行标签</span></button><button onClick={()=>{setComposerMenu(false);setWorkbench("files");setPanelOpen(true);}}><FolderOpen size={16}/>项目材料<span>查看当前任务文件</span></button></div>}{attached && <><label><ShieldCheck size={13}/><select aria-label="网页操作权限" disabled={composerBusy} value={permission} onChange={e=>setPermission(e.target.value as typeof permission)}><option value="read">仅阅读</option><option value="interact">阅读与操作</option></select></label><button className="aw-detach" disabled={composerBusy} aria-label="移除网页上下文" onClick={()=>{setAttached(false);setActiveSkill("灵感发现");}}><X size={13}/></button></>}</div><button className="br-send" onClick={send} disabled={composerBusy || !prompt.trim() || creditState === "empty"} aria-label="发送研究任务"><>{sandbox.preparing ? <LoaderCircle size={19} className="br-spin"/> : <ArrowUp size={21}/>}</></button></div></div><p className="br-composer-note" role="status">{guestMode ? "你的问题已保留，登录后自动继续" : caseItem ? "免费案例 · 0 积分 · 可随时返回首页" : sandbox.preparing ? "正在准备云主机，就绪后自动执行你的指令…" : environmentInactive ? "发送指令即可自动启动云主机" : "内容由AI生成，请仔细甄别"}</p></div>
       </section>
       {panelOpen && <section className="aw-workbench-body" aria-label="任务工作台">
       {workbench === "memory" && !caseItem && <TaskMemoryPanel memory={taskMemory} projectContext={projectContext}/>}
