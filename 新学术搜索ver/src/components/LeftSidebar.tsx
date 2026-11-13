@@ -1,10 +1,11 @@
 import React, { useState, useRef } from 'react';
-import { Search, MessageSquare, Library, Rss, Clock, Plus, ChevronDown, ArrowRight, FlaskConical, GraduationCap, Lightbulb, PanelLeftClose, PanelLeftOpen, MoreHorizontal, Folder, Trash2, Bot, FolderKanban, Compass, Wrench } from 'lucide-react';
+import { Search, MessageSquare, Library, Rss, Clock, Plus, ChevronDown, ArrowRight, FlaskConical, GraduationCap, Lightbulb, PanelLeftClose, PanelLeftOpen, MoreHorizontal, Folder, Trash2, Bot, FolderKanban, Compass, Wrench, LogIn, Globe2 } from 'lucide-react';
 import { UserPanel } from './UserPanel';
 import { useLanguage } from '../contexts/LanguageContext';
 import { SettingsModal } from './SettingsModal';
 import fudanLogo from 'figma:asset/fa745d526ea9ecf0301c6464b5897d1c96cb2f95.png';
 import wisPaperLogo from 'figma:asset/3ce02a66a6df7d8cd1f86de17846e94de4e9df61.png';
+import { usePrototypeAuth } from '../lib/usePrototypeAuth';
 
 interface LeftSidebarProps {
   onNavigate?: (view: string) => void;
@@ -27,18 +28,15 @@ interface NavItem {
 const navItemsConfig: NavItem[] = [
   { id: 'all-feeds', icon: <Rss className="w-4 h-4" />, labelKey: 'nav.allFeeds' },
   { id: 'scholar-search', icon: <Search className="w-4 h-4" />, labelKey: 'nav.scholarSearch' },
-  { id: 'scholar-qa', icon: <MessageSquare className="w-4 h-4" />, labelKey: 'nav.scholarQA' },
   { id: 'my-library', icon: <Library className="w-4 h-4" />, labelKey: 'nav.myLibrary' },
 ];
 
 const latestWorkspaceNav = [
-  { id: 'explore', label: '首页', icon: Compass },
-  { id: 'scholar-qa', label: '问答', icon: MessageSquare },
-  { id: 'scholar-search', label: '搜索', icon: Search },
-  { id: 'academic-agent', label: 'Agent', icon: Bot },
-  { id: 'my-library', label: '知识库', icon: Library },
-  { id: 'research-projects', label: '项目', icon: FolderKanban },
-  { id: 'tools', label: '工具', icon: Wrench },
+  { id: 'academic-agent', label: 'Agent', labelEn: 'Agent', icon: Bot },
+  { id: 'research-projects', label: '项目', labelEn: 'Projects', icon: FolderKanban },
+  { id: 'scholar-search', label: '搜索', labelEn: 'Search', icon: Search },
+  { id: 'my-library', label: '知识库', labelEn: 'Library', icon: Library },
+  { id: 'tools', label: '工具', labelEn: 'Tools', icon: Wrench },
 ];
 
 const historyByNav: Record<string, { title: string; items: string[] }> = {
@@ -82,7 +80,7 @@ const llmsItems: LLMSItem[] = [
 ];
 
 export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenRecharge, onOpenNotifications, onNewScholarQA, onResetSearch, currentView }: LeftSidebarProps = {}) {
-  const [activeNav, setActiveNav] = useState('all-feeds');
+  const [activeNav, setActiveNav] = useState('academic-agent');
   const [showMyLibrary, setShowMyLibrary] = useState(false);
   const [showLLMSSection, setShowLLMSSection] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -97,7 +95,8 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenRec
   ]);
   const [draggedHistoryId, setDraggedHistoryId] = useState<string | null>(null);
   const historyMenuRef = useRef<HTMLDivElement>(null);
-  const { t } = useLanguage();
+  const { t, language, setLanguage } = useLanguage();
+  const { isAuthenticated, setAuthenticated } = usePrototypeAuth();
 
   React.useEffect(() => {
     if (currentView === 'explore') {
@@ -116,7 +115,6 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenRec
       setShowMoreMenu(true);
     } else if (currentView === 'fudan-collection-search') {
       setActiveNav('fudan-collection-search');
-      setShowMoreMenu(true);
     } else if (currentView === 'academic-agent') {
       setActiveNav('academic-agent');
     } else if (currentView === 'research-projects') {
@@ -218,7 +216,7 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenRec
       {/* Logo */}
       <div className={`${isCollapsed ? 'px-2' : 'px-3'} py-3 border-b border-gray-100 flex items-center justify-between`}>
         <button 
-          onClick={() => onNavigate?.('home')}
+          onClick={() => onNavigate?.('academic-agent')}
           className="flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0"
         >
           <img src={wisPaperLogo} alt="WisPaper" className="w-5 h-5 object-contain flex-shrink-0" />
@@ -251,7 +249,9 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenRec
       {/* Navigation */}
       <nav className={`flex-1 ${isCollapsed ? 'px-1' : 'px-2'} py-2 ${isCollapsed ? 'overflow-visible' : 'overflow-y-auto'}`}>
         <div className="space-y-1" aria-label="Workspace 一级导航">
-          {latestWorkspaceNav.map(({ id, label, icon: Icon }) => (
+          {latestWorkspaceNav.map(({ id, label, labelEn, icon: Icon }) => {
+            const displayLabel = language === 'zh' ? label : labelEn;
+            return (
             <div key={id} className="relative group">
               <button
                 type="button"
@@ -263,15 +263,15 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenRec
                 }`}
               >
                 <Icon className="w-4 h-4 flex-shrink-0" />
-                {!isCollapsed && <span>{label}</span>}
+                {!isCollapsed && <span>{displayLabel}</span>}
               </button>
               {isCollapsed && (
                 <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 z-[60] pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
-                  <span className="inline-block px-2 py-1 bg-gray-900 text-white text-xs rounded-md whitespace-nowrap shadow-lg">{label}</span>
+                  <span className="inline-block px-2 py-1 bg-gray-900 text-white text-xs rounded-md whitespace-nowrap shadow-lg">{displayLabel}</span>
                 </div>
               )}
             </div>
-          ))}
+          );})}
         </div>
 
         <div className="my-3 border-t border-gray-100" />
@@ -441,19 +441,6 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenRec
             {showMoreMenu && !isCollapsed && (
               <div className="ml-3 mt-0.5 pl-3.5 border-l border-gray-200 space-y-0.5">
                 <button
-                  onClick={() => { handleNavClick('scholar-qa'); }}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md transition-colors text-sm ${
-                    activeNav === 'scholar-qa'
-                      ? 'bg-gray-100 text-gray-900 font-medium'
-                      : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  <span>{t('nav.scholarQA')}</span>
-                  <span className="ml-auto px-1.5 py-0.5 bg-cyan-100 text-cyan-700 text-xs rounded font-medium">Beta</span>
-                </button>
-
-                <button
                   onClick={() => { handleNavClick('idea-discovery'); }}
                   className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md transition-colors text-sm ${
                     activeNav === 'idea-discovery'
@@ -515,19 +502,6 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenRec
             {showMoreMenu && isCollapsed && (
               <div className="absolute left-full top-0 ml-0 z-50 pl-3">
                 <div className="w-56 bg-white border border-gray-200 rounded-lg shadow-lg py-1 mt-8">
-                      <button
-                        onClick={() => { handleNavClick('scholar-qa'); setShowMoreMenu(false); }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
-                          activeNav === 'scholar-qa'
-                            ? 'bg-gray-100 text-gray-900 font-medium'
-                            : 'text-gray-600 hover:bg-gray-50'
-                        }`}
-                      >
-                        <MessageSquare className="w-4 h-4" />
-                        <span>{t('nav.scholarQA')}</span>
-                        <span className="ml-auto px-1.5 py-0.5 bg-cyan-100 text-cyan-700 text-xs rounded font-medium">Beta</span>
-                      </button>
-
                       <button
                         onClick={() => { handleNavClick('idea-discovery'); setShowMoreMenu(false); }}
                         className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
@@ -705,14 +679,21 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenRec
       </nav>
 
       {/* User Panel */}
-      <UserPanel 
-        onOpenInvite={onOpenInvite} 
-        onOpenPaywall={onOpenPaywall} 
-        onOpenRecharge={onOpenRecharge} 
-        onOpenNotifications={onOpenNotifications}
-        onOpenSettings={() => setShowSettingsModal(true)}
-        isCollapsed={isCollapsed}
-      />
+      {isAuthenticated ? (
+        <UserPanel
+          onOpenInvite={onOpenInvite}
+          onOpenPaywall={onOpenPaywall}
+          onOpenRecharge={onOpenRecharge}
+          onOpenNotifications={onOpenNotifications}
+          onOpenSettings={() => setShowSettingsModal(true)}
+          isCollapsed={isCollapsed}
+        />
+      ) : (
+        <div className={`border-t border-gray-200 bg-white ${isCollapsed ? 'space-y-2 p-2' : 'grid grid-cols-2 gap-2 p-3'}`} aria-label="Authentication actions">
+          <button type="button" onClick={() => { setAuthenticated(true); if (currentView === 'academic-agent') onOpenPaywall?.(); }} title={language === 'zh' ? '登录' : 'Sign In'} className={`inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-700 transition hover:border-gray-300 hover:bg-gray-50 ${isCollapsed ? 'h-9 w-9' : 'px-3 py-2'}`}><LogIn className="h-4 w-4" />{!isCollapsed && <span>{language === 'zh' ? '登录' : 'Sign In'}</span>}</button>
+          <button type="button" onClick={() => setLanguage(language === 'zh' ? 'en' : 'zh')} title={language === 'zh' ? 'Switch to English' : '切换为中文'} aria-label={language === 'zh' ? 'Switch to English' : '切换为中文'} className={`inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-700 transition hover:border-gray-300 hover:bg-gray-50 ${isCollapsed ? 'h-9 w-9' : 'px-3 py-2'}`}><Globe2 className="h-4 w-4" />{!isCollapsed && <span>{language === 'zh' ? 'English' : '中文'}</span>}</button>
+        </div>
+      )}
 
       {/* Settings Modal */}
       <SettingsModal 

@@ -3,7 +3,7 @@ import { Search, ArrowRight, ChevronRight, ChevronLeft, BookOpen, GraduationCap,
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface ScholarSearchHomeProps {
-  onSearch: (query: string) => void;
+  onSearch: (query: string, mode?: 'quick' | 'deep') => void;
   onQuickOpen: (identifier: AcademicIdentifier) => void;
   showDeepSearchTooltip?: boolean;
   onTooltipDismiss?: () => void;
@@ -99,7 +99,7 @@ export function ScholarSearchHome({ onSearch, onQuickOpen }: ScholarSearchHomePr
 
   const handleSearch = () => {
     const query = searchQuery.trim();
-    if (query) onSearch(query);
+    if (query) onSearch(query, searchMode);
   };
 
   return (

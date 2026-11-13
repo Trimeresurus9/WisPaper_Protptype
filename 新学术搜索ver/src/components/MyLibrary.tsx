@@ -32,6 +32,8 @@ import {
 import { Paper } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 import { StorageUsagePanel } from './StorageUsagePanel';
+import { usePrototypeAuth } from '../lib/usePrototypeAuth';
+import { useGlobalAskAIHistory } from '../lib/useGlobalAskAIHistory';
 
 interface MyLibraryProps {
   papers: Paper[];
@@ -64,6 +66,9 @@ const statusSequence: LibraryStatus[] = [
 ];
 
 export function MyLibrary({ papers, onPaperClick, onOpenReader }: MyLibraryProps) {
+  const { isAuthenticated, setAuthenticated } = usePrototypeAuth();
+  const { sessions: globalAskSessions, latestForScene, upsertSession } = useGlobalAskAIHistory('library');
+  const historyInitialized = React.useRef(false);
   const { language } = useLanguage();
   const isZh = language === 'zh';
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
@@ -89,6 +94,7 @@ export function MyLibrary({ papers, onPaperClick, onOpenReader }: MyLibraryProps
   ]);
   const [assistantThinking, setAssistantThinking] = useState(false);
   const [assistantMessages, setAssistantMessages] = useState<AssistantMessage[]>([]);
+  const [assistantSessionId, setAssistantSessionId] = useState(() => `library-${Date.now()}`);
   const [showChatHistory, setShowChatHistory] = useState(false);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([
     {
@@ -111,6 +117,32 @@ export function MyLibrary({ papers, onPaperClick, onOpenReader }: MyLibraryProps
   ]);
   const localFileInputRef = useRef<HTMLInputElement | null>(null);
   const assistantFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  React.useEffect(() => {
+    if (!isAuthenticated) {
+      setAssistantScope('Product Help');
+      setShowScopeMenu(false);
+      setShowChatHistory(false);
+      setAssistantAttachment('');
+    }
+  }, [isAuthenticated]);
+
+  React.useEffect(() => {
+    if (!isAuthenticated || historyInitialized.current) return;
+    historyInitialized.current = true;
+    if (latestForScene) {
+      setAssistantSessionId(latestForScene.id);
+      setAssistantScope(latestForScene.source);
+      setAssistantMessages(latestForScene.messages as AssistantMessage[]);
+    }
+  }, [isAuthenticated, latestForScene]);
+
+  React.useEffect(() => {
+    if (!isAuthenticated) { historyInitialized.current = false; return; }
+    const firstQuestion = assistantMessages.find((message) => message.role === 'user')?.text;
+    if (!firstQuestion) return;
+    upsertSession({ id: assistantSessionId, scene: 'library', pageLabel: 'Library', title: firstQuestion, source: assistantScope, messages: assistantMessages });
+  }, [assistantMessages, assistantScope, assistantSessionId, isAuthenticated, upsertSession]);
 
   const rows = papers
     .slice(0, 15)
@@ -156,9 +188,11 @@ export function MyLibrary({ papers, onPaperClick, onOpenReader }: MyLibraryProps
   };
 
   const submitAssistantQuestion = () => {
+    if (!isAuthenticated) return;
     const question = assistantQuestion.trim();
     if (!question || assistantThinking) return;
-    const effectiveScope = selectedPapers.length > 0
+    const productHelpSelected = assistantScope === '产品帮助' || assistantScope === 'Product Help';
+    const effectiveScope = !productHelpSelected && selectedPapers.length > 0
       ? (isZh ? `${selectedPapers.length} 篇选中文献` : `${selectedPapers.length} selected papers`)
       : assistantScope;
     console.info('Ask library assistant', {
@@ -180,7 +214,9 @@ export function MyLibrary({ papers, onPaperClick, onOpenReader }: MyLibraryProps
         {
           role: 'assistant',
           text: isZh
-            ? `我已在${effectiveScope}中检索相关内容。关键证据集中在方法设计、实验设置与结论边界三部分。你可以继续让我生成摘要、对比表或引用清单。`
+            ? productHelpSelected
+              ? '我会基于 WisPaper 产品帮助回答。你可以询问搜索、Library、Agent、科研画布、Survey 或其他功能的使用方法。'
+              : `我已在${effectiveScope}中检索相关内容。关键证据集中在方法设计、实验设置与结论边界三部分。你可以继续让我生成摘要、对比表或引用清单。`
             : `I searched the ${effectiveScope.toLowerCase()} for related material. The strongest evidence is concentrated in method design, experimental setup, and the limits of the conclusions. You can ask for a summary, comparison table, or citation list next.`,
         },
       ]);
@@ -245,6 +281,7 @@ export function MyLibrary({ papers, onPaperClick, onOpenReader }: MyLibraryProps
       ]);
     }
     setAssistantMessages([]);
+    setAssistantSessionId(`library-${Date.now()}`);
     setAssistantQuestion('');
     setAssistantAttachment('');
     setAssistantThinking(false);
@@ -578,7 +615,7 @@ export function MyLibrary({ papers, onPaperClick, onOpenReader }: MyLibraryProps
             )}
           </div>
         )}
-        <div className={`w-full max-w-5xl rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-[0_24px_70px_-26px_rgba(15,23,42,0.35)] backdrop-blur-xl ${chatOpen ? 'pointer-events-none' : 'pointer-events-auto'}`}>
+        <div className="hidden">
           {renderSelectedPaperCards()}
           <textarea
             value={assistantQuestion}
@@ -638,7 +675,7 @@ export function MyLibrary({ papers, onPaperClick, onOpenReader }: MyLibraryProps
                 </button>
                 {showScopeMenu && (
                   <div className="absolute bottom-11 left-0 w-40 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
-                    {(isZh ? ['所选文件', '知识库', 'web资源库'] : ['Selected files', 'Library', 'Web resources']).map((option) => (
+                    {(isZh ? ['Product Help', '所选文件', '知识库', 'Web 资源'] : ['Product Help', 'Selected files', 'Library', 'Web resources']).map((option) => (
                       <button
                         key={option}
                         type="button"
@@ -707,9 +744,25 @@ export function MyLibrary({ papers, onPaperClick, onOpenReader }: MyLibraryProps
         </div>
       </div>
 
-      <aside
-        style={{ width: chatOpen ? panelWidth : 56 }}
-        className={`relative z-40 ml-3 flex h-full shrink-0 flex-col overflow-hidden border-l border-slate-200 bg-white ${
+      {(!chatOpen || panelMode === 'document') && (
+        <button
+          type="button"
+          onClick={() => {
+            setPanelMode('chat');
+            setActivePanelTab('chat');
+            setChatOpen(true);
+          }}
+          className="fixed bottom-6 right-6 z-[45] flex h-14 items-center gap-2 rounded-full bg-[#1b87ff] px-5 text-sm font-semibold text-white shadow-[0_18px_44px_-14px_rgba(27,135,255,.8)] transition hover:-translate-y-0.5 hover:bg-blue-600"
+          aria-label={isZh ? '打开 Ask AI' : 'Open Ask AI'}
+        >
+          <Sparkles className="h-4 w-4" />
+          Ask AI
+        </button>
+      )}
+
+      {(panelMode === 'document' || chatOpen) && <aside
+        style={{ width: panelMode === 'chat' ? 410 : chatOpen ? panelWidth : 56 }}
+        className={`${panelMode === 'chat' ? 'fixed bottom-5 right-5 z-[46] h-[min(680px,calc(100vh-40px))] rounded-3xl border border-slate-200 shadow-[0_30px_90px_-24px_rgba(15,23,42,.45)]' : 'relative z-40 ml-3 h-full shrink-0 border-l border-slate-200'} flex flex-col overflow-hidden bg-white ${
           isResizingPanel ? '' : 'transition-[width] duration-300 ease-out'
         }`}
         aria-label={chatOpen ? (isZh ? '文献工作栏' : 'Paper workspace') : (isZh ? '已折叠的文献工作栏' : 'Collapsed paper workspace')}
@@ -739,30 +792,33 @@ export function MyLibrary({ papers, onPaperClick, onOpenReader }: MyLibraryProps
           </div>
         ) : (
           <>
-            <button
+            {panelMode === 'document' && <button
               type="button"
               onPointerDown={startPanelResize}
               className="group absolute inset-y-0 left-0 z-50 w-2 cursor-col-resize touch-none"
               aria-label={isZh ? '拖动调整侧栏宽度' : 'Drag to resize the side panel'}
             >
               <span className="absolute inset-y-0 left-0 w-px bg-slate-200 transition group-hover:w-0.5 group-hover:bg-blue-400" />
-            </button>
+            </button>}
 
             <nav className="flex h-14 shrink-0 items-stretch border-b border-slate-100 pl-3 pr-2" aria-label={panelMode === 'chat' ? (isZh ? '问答工具' : 'Chat tools') : (isZh ? '文献工具' : 'Paper tools')}>
               <div className={`grid min-w-0 flex-1 ${panelMode === 'chat' ? 'grid-cols-1' : 'grid-cols-4'}`}>
                 {(panelMode === 'chat'
-                  ? [{ tab: 'chat' as const, label: 'AI Chat', icon: Bot }]
+                  ? [{ tab: 'chat' as const, label: 'Ask AI', icon: Bot }]
                   : [
                       { tab: 'info' as const, label: isZh ? '信息' : 'Info', icon: Info },
                       { tab: 'notes' as const, label: isZh ? '笔记' : 'Notes', icon: StickyNote },
                       { tab: 'comments' as const, label: isZh ? '评论' : 'Comments', icon: MessageCircle },
-                      { tab: 'chat' as const, label: 'AI Chat', icon: Bot },
+                      { tab: 'chat' as const, label: 'Ask AI', icon: Bot },
                     ]
                 ).map(({ tab, label, icon: Icon }) => (
                   <button
                     key={tab}
                     type="button"
-                    onClick={() => setActivePanelTab(tab)}
+                    onClick={() => {
+                      setActivePanelTab(tab);
+                      if (tab === 'chat') setPanelMode('chat');
+                    }}
                     className={`relative flex min-w-0 items-center justify-center gap-1.5 text-xs font-medium transition ${
                       tab === 'chat' && panelMode === 'document' ? 'border-l border-slate-100' : ''
                     } ${
@@ -782,11 +838,11 @@ export function MyLibrary({ papers, onPaperClick, onOpenReader }: MyLibraryProps
                 className="ml-2 flex h-9 w-9 shrink-0 self-center items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
                 aria-label={isZh ? '收起右侧组件栏' : 'Collapse side panel'}
               >
-                <ChevronRight className="h-4 w-4" />
+                {panelMode === 'chat' ? <X className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
               </button>
             </nav>
 
-            {activePanelTab === 'chat' && (
+            {activePanelTab === 'chat' && isAuthenticated && (
               <div className="flex h-12 shrink-0 items-center justify-between border-b border-slate-100 px-4">
                 <button
                   type="button"
@@ -939,19 +995,19 @@ export function MyLibrary({ papers, onPaperClick, onOpenReader }: MyLibraryProps
                     {showChatHistory ? (
                       <div>
                         <p className="mb-3 text-[11px] font-medium text-slate-400">
-                          {isZh ? `${chatSessions.length} 个历史对话` : `${chatSessions.length} previous chats`}
+                          {isZh ? `${globalAskSessions.length} 个全局历史对话` : `${globalAskSessions.length} global chats`}
                         </p>
                         <div className="divide-y divide-slate-100">
-                          {chatSessions.map((session) => (
+                          {globalAskSessions.map((session) => (
                             <button
                               key={session.id}
                               type="button"
-                              onClick={() => restoreConversation(session)}
+                              onClick={() => { setAssistantSessionId(session.id); setAssistantMessages(session.messages as AssistantMessage[]); setAssistantScope(session.source); setShowChatHistory(false); }}
                               className="group flex w-full items-center justify-between gap-4 py-3 text-left transition hover:bg-slate-50"
                             >
                               <div className="min-w-0">
                                 <p className="truncate text-sm font-medium text-slate-800 group-hover:text-slate-950">{session.title}</p>
-                                <p className="mt-1 text-[10px] text-slate-400">{session.time}</p>
+                                <p className="mt-1 text-[10px] text-slate-400">{session.pageLabel} · {session.source} · {session.time}</p>
                               </div>
                               <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500" />
                             </button>
@@ -1004,6 +1060,7 @@ export function MyLibrary({ papers, onPaperClick, onOpenReader }: MyLibraryProps
                   </div>
 
                   <div className="shrink-0 border-t border-slate-100 bg-slate-50/70 p-3">
+                    {!isAuthenticated && <div className="mb-3 rounded-xl border border-blue-100 bg-blue-50 p-3"><p className="text-xs leading-5 text-slate-600">请先登录后使用 Ask AI。登录后可使用知识库、文件和 Web 资源，并访问全局聊天历史。</p><button type="button" onClick={() => setAuthenticated(true)} className="mt-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white">注册 / 登录</button></div>}
                     {assistantAttachment && (
                       <div className="mb-2 flex w-fit max-w-full items-center gap-2 rounded-lg bg-white px-2.5 py-1.5 text-[10px] text-slate-600 ring-1 ring-slate-200">
                         <FileText className="h-3.5 w-3.5 shrink-0" />
@@ -1011,9 +1068,10 @@ export function MyLibrary({ papers, onPaperClick, onOpenReader }: MyLibraryProps
                       </div>
                     )}
                     <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm focus-within:border-slate-300">
-                      {renderSelectedPaperCards(true)}
+                      {isAuthenticated && renderSelectedPaperCards(true)}
                       <textarea
                         value={assistantQuestion}
+                        disabled={!isAuthenticated}
                         onChange={(event) => setAssistantQuestion(event.target.value)}
                         onKeyDown={(event) => {
                           if (event.key === 'Enter' && !event.shiftKey) {
@@ -1026,15 +1084,21 @@ export function MyLibrary({ papers, onPaperClick, onOpenReader }: MyLibraryProps
                         className="h-16 w-full resize-none bg-transparent px-2 py-1.5 text-sm leading-6 text-slate-800 outline-none placeholder:text-slate-400"
                       />
                       <div className="flex items-center justify-between">
-                        <button
+                        <div className="flex items-center gap-1">
+                        {isAuthenticated && <button
                           type="button"
                           onClick={() => assistantFileInputRef.current?.click()}
                           className="flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
                           aria-label={isZh ? '添加附件' : 'Add attachment'}
                         >
                           <Plus className="h-4 w-4" />
-                        </button>
-                        <button
+                        </button>}
+                        <div className="relative">
+                          <button type="button" disabled={!isAuthenticated} onClick={() => setShowScopeMenu((value) => !value)} className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-[11px] font-medium text-slate-600 transition hover:bg-slate-100 disabled:cursor-default"><FileText className="h-3.5 w-3.5" />{assistantScope}<ChevronDown className="h-3 w-3" /></button>
+                          {showScopeMenu && isAuthenticated && <div className="absolute bottom-10 left-0 z-20 w-40 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">{(isZh ? ['Product Help', '所选文件', '知识库', 'Web 资源'] : ['Product Help', 'Selected files', 'Library', 'Web resources']).map((option) => <button key={option} type="button" onClick={() => { setAssistantScope(option); setShowScopeMenu(false); }} className={`w-full rounded-lg px-3 py-2 text-left text-xs ${assistantScope === option ? 'bg-blue-50 font-medium text-blue-600' : 'text-slate-600 hover:bg-slate-50'}`}>{option}</button>)}</div>}
+                        </div>
+                        </div>
+                        <div className="flex items-center gap-2"><button
                           type="button"
                           onClick={submitAssistantQuestion}
                           disabled={!assistantQuestion.trim() || assistantThinking}
@@ -1042,7 +1106,7 @@ export function MyLibrary({ papers, onPaperClick, onOpenReader }: MyLibraryProps
                           aria-label={isZh ? '发送问题' : 'Send question'}
                         >
                           {assistantThinking ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
-                        </button>
+                        </button></div>
                       </div>
                     </div>
                   </div>
@@ -1051,7 +1115,7 @@ export function MyLibrary({ papers, onPaperClick, onOpenReader }: MyLibraryProps
             </div>
           </>
         )}
-      </aside>
+      </aside>}
     </div>
   );
 }

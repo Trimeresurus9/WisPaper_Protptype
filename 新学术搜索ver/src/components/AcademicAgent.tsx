@@ -1,9 +1,11 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import inspirationDiscoveryImage from "../assets/agent-cases/inspiration-discovery.jpg";
 import literatureReviewImage from "../assets/agent-cases/literature-review.jpg";
 import paperReproductionImage from "../assets/agent-cases/paper-reproduction.jpg";
 import {
   ArrowUp,
+  ArrowUpRight,
   Ban,
   BarChart3,
   BookOpen,
@@ -22,6 +24,7 @@ import {
   FlaskConical,
   FolderKanban,
   GraduationCap,
+  History,
   Image,
   Library,
   LoaderCircle,
@@ -42,13 +45,18 @@ import {
   SkipForward,
   Sparkles,
   TriangleAlert,
+  UserRound,
   WandSparkles,
   X,
   Zap,
 } from "lucide-react";
 import { ResearchTree } from "./ResearchTree";
+import { usePrototypeAuth } from "../lib/usePrototypeAuth";
+import { useGlobalAskAIHistory } from "../lib/useGlobalAskAIHistory";
+import { GlobalAskAIDrawer } from "./GlobalAskAIDrawer";
+import { useLanguage } from "../contexts/LanguageContext";
 
-type WorkbenchTab = "files" | "search" | "plan" | "gpu" | "bio" | "note";
+type WorkbenchTab = "common" | "ask" | "files" | "search" | "plan" | "gpu" | "bio" | "note";
 type AgentTierId = "fast" | "balanced" | "primary" | "deep";
 type AgentTodoStatus = "pending" | "active" | "waiting" | "blocked" | "done" | "skipped" | "failed";
 type AgentTodoType = "agent" | "approval" | "user";
@@ -90,6 +98,12 @@ interface QuickTask {
   icon: React.ElementType;
 }
 
+interface LaunchShortcut {
+  title: string;
+  icon: React.ElementType;
+  samples: AgentSamplePrompt[];
+}
+
 interface AgentSamplePrompt {
   title: string;
   summary: string;
@@ -105,6 +119,20 @@ interface AgentCaseStudy {
   prompt: string;
   credits: string;
 }
+
+interface AgentRouteSession {
+  kind: "case" | "task";
+  title: string;
+  skill: string | null;
+  messages: Array<{ role: "user" | "agent"; text: string }>;
+  replay?: { title: string; summary: string; outcome: string; model: "Lite" | "Pro" };
+}
+
+const openAgentSessionRoute = (session: AgentRouteSession) => {
+  const id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  try { window.localStorage.setItem(`wispaper-agent-session:${id}`, JSON.stringify(session)); } catch { /* prototype storage */ }
+  window.history.pushState({ view: "academic-agent", agentSessionId: id }, "", `/app/agent/${id}`);
+};
 
 const quickTasks: QuickTask[] = [
   {
@@ -125,23 +153,43 @@ const quickTasks: QuickTask[] = [
 ];
 
 const quickTaskSamplePrompts: Record<string, AgentSamplePrompt[]> = {
+  搜索文献: [
+    {
+      title: "近 3 年 Agent 测评论文",
+      summary: "围绕明确问题做多轮检索，定位奠基论文、关键转折与最新进展。",
+      prompt: "检索近 3 年 AI Agent 测评相关论文，并比较任务基准、能力维度、评价指标和主要结论。",
+      credits: "12K",
+    },
+    {
+      title: "强化学习推理",
+      summary: "扩展关键词与引文网络，对照不同技术路线的证据、局限和适用条件。",
+      prompt: "帮我寻找使用强化学习优化大模型推理能力的代表性论文，梳理方法演进和关键争议。",
+      credits: "14K",
+    },
+    {
+      title: "多模态科研 Agent",
+      summary: "优先检索真实任务评测、负面结果和可复现证据，减少只看正向结论的偏差。",
+      prompt: "检索多模态 Agent 在科研场景中的最新工作，优先关注真实任务评测与失败案例。",
+      credits: "16K",
+    },
+  ],
   灵感发现: [
     {
-      title: "从已有材料提炼研究机会",
+      title: "小样本医学影像",
       summary: "梳理笔记、论文与阶段性想法，识别值得验证的矛盾、缺口和下一步方向。",
-      prompt: "分析我已有的研究材料，归纳关键线索，并提出若干值得继续验证的问题与探索路径。",
+      prompt: "围绕小样本医学影像分析，寻找可迁移学习、数据增强与不确定性估计之间值得验证的新研究问题。",
       credits: "8K",
     },
     {
-      title: "比较相邻方向寻找突破口",
+      title: "多智能体协作",
       summary: "对照相关研究方向的目标、方法与证据，发现可迁移思路和潜在创新空间。",
-      prompt: "比较几个相邻研究方向的核心问题与常用方法，帮我识别可能的交叉机会和突破口。",
+      prompt: "围绕多智能体协作中的任务分工、通信成本和冲突消解，帮我发现具有可验证性的研究突破口。",
       credits: "10K",
     },
     {
-      title: "把零散想法变成候选问题",
+      title: "绿色金融风险",
       summary: "聚合日常记录中的反复线索，评估新颖性、可验证性与潜在影响，形成候选问题池。",
-      prompt: "整理我提供的零散想法，归纳反复出现的线索，并生成一组可比较、可验证的候选研究问题。",
+      prompt: "从绿色金融、气候披露与企业风险定价的交叉点出发，提出一组可比较、可验证的候选研究问题。",
       credits: "9K",
     },
   ],
@@ -167,25 +215,93 @@ const quickTaskSamplePrompts: Record<string, AgentSamplePrompt[]> = {
   ],
   文献综述: [
     {
-      title: "快速建立主题证据地图",
+      title: "Agent 测评",
       summary: "按研究问题、方法、数据与结论组织文献，形成结构清晰、可追溯的证据框架。",
-      prompt: "围绕我关心的研究方向检索并整理文献，建立包含问题、方法、证据和结论的主题地图。",
+      prompt: "围绕 AI Agent 测评生成文献综述，比较任务基准、能力维度、评价指标和真实场景中的主要局限。",
       credits: "10K",
     },
     {
-      title: "从研究脉络识别空白",
+      title: "非小细胞肺癌",
       summary: "追踪代表性工作的演进关系，归纳共识、争议、局限与尚未解决的问题。",
-      prompt: "梳理一个研究方向的发展脉络，归纳主要共识与争议，并指出值得继续研究的空白。",
+      prompt: "围绕非小细胞肺癌的免疫治疗生成文献综述，梳理治疗策略、生物标志物、临床证据和研究空白。",
       credits: "14K",
     },
     {
-      title: "设计综述检索与纳入标准",
+      title: "量化因子投资",
       summary: "把研究目标转成可执行的检索式、筛选条件和质量评估框架，降低遗漏与偏差。",
-      prompt: "根据我的综述目标，设计检索策略、文献纳入排除标准和质量评估框架。",
+      prompt: "围绕量化因子投资生成文献综述，比较经典因子、机器学习方法、回测偏差和市场有效性证据。",
+      credits: "9K",
+    },
+  ],
+  论文评审: [
+    {
+      title: "长上下文模型论文",
+      summary: "从贡献、正确性、清晰度和影响力出发，给出结构化审稿意见与评分依据。",
+      prompt: "以顶会审稿人的标准评审一篇关于长上下文模型的论文，重点检查创新性、评测覆盖和结论边界。",
+      credits: "8K",
+    },
+    {
+      title: "肺癌诊断模型论文",
+      summary: "逐项检查对照组、消融、统计证据和边界条件是否足以支撑核心结论。",
+      prompt: "评审一篇非小细胞肺癌辅助诊断模型论文，检查数据划分、外部验证、临床基线和统计证据是否充分。",
+      credits: "10K",
+    },
+    {
+      title: "资产定价因子论文",
+      summary: "对照相关工作与创新声明，识别容易被质疑的表述、证据缺口和改进方向。",
+      prompt: "评审一篇资产定价因子论文，重点检查因子挖掘偏差、交易成本、样本外表现和经济解释。",
       credits: "9K",
     },
   ],
 };
+
+const launchShortcuts: LaunchShortcut[] = [
+  { title: "搜索文献", icon: Search, samples: quickTaskSamplePrompts.搜索文献 },
+  { title: "文献综述", icon: BookOpen, samples: quickTaskSamplePrompts.文献综述 },
+  { title: "灵感发现", icon: Sparkles, samples: quickTaskSamplePrompts.灵感发现 },
+  { title: "论文评审", icon: GraduationCap, samples: quickTaskSamplePrompts.论文评审 },
+];
+
+const launchShortcutEnglish: Record<string, { title: string; samples: Array<{ title: string; prompt: string }> }> = {
+  搜索文献: {
+    title: "Search Papers",
+    samples: [
+      { title: "Agent Evaluation · Last 3 Years", prompt: "Find papers from the last three years on AI Agent evaluation, and compare task benchmarks, capability dimensions, metrics, and key findings." },
+      { title: "RL for Reasoning", prompt: "Find representative work on reinforcement learning for improving LLM reasoning, and summarize the evolution of methods and major debates." },
+      { title: "Multimodal Research Agents", prompt: "Search for recent work on multimodal Agents for scientific research, prioritizing real-world evaluations and documented failure cases." },
+    ],
+  },
+  文献综述: {
+    title: "Literature Review",
+    samples: [
+      { title: "Agent Evaluation", prompt: "Write a literature review on AI Agent evaluation, comparing task benchmarks, capability dimensions, metrics, and limitations in real-world settings." },
+      { title: "Non-Small Cell Lung Cancer", prompt: "Write a literature review on immunotherapy for non-small cell lung cancer, covering treatment strategies, biomarkers, clinical evidence, and research gaps." },
+      { title: "Quantitative Factor Investing", prompt: "Write a literature review on quantitative factor investing, comparing classic factors, machine-learning methods, backtest bias, and evidence on market efficiency." },
+    ],
+  },
+  灵感发现: {
+    title: "Idea Discovery",
+    samples: [
+      { title: "Few-Shot Medical Imaging", prompt: "Identify testable research questions at the intersection of few-shot medical imaging, transfer learning, data augmentation, and uncertainty estimation." },
+      { title: "Multi-Agent Collaboration", prompt: "Find promising research opportunities in task allocation, communication cost, and conflict resolution for multi-Agent collaboration." },
+      { title: "Green Finance Risk", prompt: "Propose testable research questions connecting green finance, climate disclosure, and corporate risk pricing." },
+    ],
+  },
+  论文评审: {
+    title: "Paper Review",
+    samples: [
+      { title: "Long-Context Model Paper", prompt: "Review a paper on long-context models as a top-tier conference reviewer, focusing on novelty, evaluation coverage, and the boundaries of its claims." },
+      { title: "Lung Cancer Diagnosis Paper", prompt: "Review a paper on an assistive diagnostic model for non-small cell lung cancer, checking data splits, external validation, clinical baselines, and statistical evidence." },
+      { title: "Asset-Pricing Factor Paper", prompt: "Review an asset-pricing factor paper, focusing on factor-mining bias, transaction costs, out-of-sample performance, and economic interpretation." },
+    ],
+  },
+};
+
+const defaultCaseStudyEnglish = [
+  { title: "Turn conflicting evidence into a research question", field: "Cross-domain exploration", summary: "Compare inconsistent findings and trace whether the differences come from samples, methods, or assumptions.", outcome: "3 candidate questions with validation priorities", prompt: "Analyze conflicting evidence in my materials and turn it into testable research questions." },
+  { title: "Transfer a method from an adjacent field", field: "Method innovation", summary: "Compare neighboring fields, identify transferable methods, and evaluate their fit and potential value.", outcome: "A method-transfer matrix and validation plan", prompt: "Compare methods from adjacent fields and propose transferable hypotheses with minimal validation plans." },
+  { title: "Discover hidden patterns in long-term notes", field: "Research insight", summary: "Aggregate notes and reading records to uncover recurring signals that have not yet been clearly articulated.", outcome: "Signal clusters, candidate explanations, and next steps", prompt: "Analyze my long-term research notes, identify hidden patterns, and propose testable explanations." },
+];
 
 const quickTaskCaseStudies: Record<string, AgentCaseStudy[]> = {
   灵感发现: [
@@ -284,7 +400,26 @@ const moreTools = [
   { label: "Library 管理", icon: Library },
 ];
 
+const commonFunctions: Array<{ label: string; detail: string; icon: React.ElementType }> = [
+  { label: "灵感发现", detail: "通过苏格拉底式对话，逐步明确方向并形成研究计划", icon: Sparkles },
+  { label: "论文复现", detail: "自动完成信息收集、计划生成、GPU 分配与代码执行", icon: Code2 },
+  { label: "文献综述", detail: "自动生成学术文献综述，支持自定义篇幅与文献范围", icon: BookOpen },
+  { label: "配置 GPU", detail: "一键申请 GPU 服务器，支持多种型号选择", icon: Cpu },
+  { label: "论文主图", detail: "基于论文核心思想，生成符合期刊规范的高质量主图", icon: Image },
+  { label: "论文评审", detail: "模拟同行评审，拓展创新点与可行方案", icon: MessageSquareText },
+  { label: "Idea 升华", detail: "优化研究想法，拓展创新点与可行方案", icon: WandSparkles },
+  { label: "LaTeX 写作", detail: "从科研数据到顶会论文，一站式直达 Camera-Ready", icon: FileText },
+  { label: "顺藤摸瓜", detail: "依托引文网络，全面收集相关文献", icon: Network },
+  { label: "引用核查", detail: "逐句核查引用，并附原文证据", icon: CheckCircle2 },
+  { label: "Library 管理", detail: "选择同步、导入或检索等操作", icon: Library },
+  { label: "PPT 创作", detail: "基于真实材料生成可编辑 PPT，支持数据核验与独立评审", icon: GraduationCap },
+  { label: "插图转 PPT", detail: "框选 PDF 图表，转换为可编辑 PPT", icon: Image },
+  { label: "插图转 Excel", detail: "框选 PDF 图表，提取数据并下载 Excel", icon: BarChart3 },
+];
+
 const tabs: { id: WorkbenchTab; label: string; icon: React.ElementType }[] = [
+  { id: "common", label: "常用功能", icon: Zap },
+  { id: "ask", label: "Ask AI", icon: MessageSquareText },
   { id: "note", label: "科研笔记", icon: FileText },
   { id: "plan", label: "执行计划", icon: Sparkles },
   { id: "files", label: "任务文件", icon: FolderKanban },
@@ -353,6 +488,10 @@ function AgentComposer({
   onClearSkill,
   disabled = false,
   compact = false,
+  onboardingMode = false,
+  placeholderOverride,
+  submittingEffect = false,
+  replayModel,
 }: {
   prompt: string;
   setPrompt: (value: string) => void;
@@ -364,14 +503,27 @@ function AgentComposer({
   onClearSkill: () => void;
   disabled?: boolean;
   compact?: boolean;
+  onboardingMode?: boolean;
+  placeholderOverride?: string;
+  submittingEffect?: boolean;
+  replayModel?: "Lite" | "Pro";
 }) {
+  const { language } = useLanguage();
   const [showTools, setShowTools] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [showAgents, setShowAgents] = useState(false);
+  const [shortcutModel, setShortcutModel] = useState<"Lite" | "Pro">("Lite");
+  const [showShortcutModels, setShowShortcutModels] = useState(false);
+  const [selectedProject, setSelectedProject] = useState("Default Project");
+  const [showProjects, setShowProjects] = useState(false);
   const currentAgent = agentTiers.find((tier) => tier.id === selectedAgent) ?? agentTiers[1];
   const CurrentAgentIcon = currentAgent.icon;
-  const selectedTask = quickTasks.find((task) => task.title === selectedSkill);
+  const selectedTask = quickTasks.find((task) => task.title === selectedSkill)
+    ?? launchShortcuts.find((shortcut) => shortcut.title === selectedSkill);
   const SelectedSkillIcon = selectedTask?.icon;
+  const isPaperSearch = selectedSkill === "搜索文献";
+  const usesLaunchOptions = ["文献综述", "灵感发现", "论文评审"].includes(selectedSkill ?? "");
+  const projectOptions = ["Default Project", "长上下文模型位置偏差研究", "多模态 Agent 评测", "非小细胞肺癌免疫治疗"];
 
   return (
     <div className="relative">
@@ -472,16 +624,16 @@ function AgentComposer({
         }`}
       >
         <div className="flex items-start gap-2 px-2">
-          {selectedTask && SelectedSkillIcon && (
+          {selectedSkill && (
             <button
               type="button"
               onClick={onClearSkill}
               className="group mt-1.5 inline-flex h-9 shrink-0 items-center gap-2 rounded-xl bg-slate-100 px-3 text-sm font-medium text-slate-800 transition hover:bg-slate-200"
-              aria-label={`移除 ${selectedTask.title} Skill`}
+              aria-label={`移除 ${selectedSkill} Skill`}
               title="点击移除 Skill"
             >
-              <SelectedSkillIcon className="h-4 w-4 text-blue-400" />
-              {selectedTask.title}
+              {SelectedSkillIcon && <SelectedSkillIcon className="h-4 w-4 text-blue-400" />}
+              {language === "zh" ? selectedSkill : launchShortcutEnglish[selectedSkill]?.title ?? ({ "实验设计": "Experiment Design" } as Record<string, string>)[selectedSkill] ?? selectedSkill}
               <X className="hidden h-3 w-3 text-slate-400 group-hover:block" />
             </button>
           )}
@@ -494,14 +646,14 @@ function AgentComposer({
                 onSubmit();
               }
             }}
-            placeholder="描述你的研究目标，或输入 / 选择工具"
+            placeholder={placeholderOverride ?? (language === "zh" ? "描述你的研究目标，或输入 / 选择工具" : "Describe your research goal, or type / to choose tools")}
             className={`min-w-0 flex-1 resize-none bg-transparent text-[15px] leading-6 text-slate-900 outline-none placeholder:text-slate-400 ${
               compact ? "h-16 py-1.5" : "h-28 py-2"
             }`}
           />
         </div>
         <div className="flex items-end justify-between gap-3">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          {!onboardingMode && <div className={`flex min-w-0 flex-1 flex-wrap items-center gap-2 transition-all duration-300 ${isPaperSearch ? "pointer-events-none max-w-0 -translate-y-1 overflow-hidden opacity-0" : "max-w-full translate-y-0 opacity-100"}`}>
             <button
               type="button"
               onClick={() => {
@@ -518,7 +670,20 @@ function AgentComposer({
             >
               <Plus className={`h-5 w-5 transition-transform ${showTools ? "rotate-45" : ""}`} />
             </button>
-            <button
+            {usesLaunchOptions ? (
+              <>
+                <div className="relative">
+                  <button type="button" onClick={() => { setShowShortcutModels((value) => !value); setShowProjects(false); }} className="flex h-9 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">
+                    {shortcutModel} <span className="text-slate-400">{shortcutModel === "Lite" ? "×0.36" : "×3.6"}</span><ChevronDown className="h-3.5 w-3.5" />
+                  </button>
+                  {showShortcutModels && <div className="absolute bottom-11 left-0 z-40 w-36 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">{(["Lite", "Pro"] as const).map((model) => <button key={model} type="button" onClick={() => { setShortcutModel(model); setShowShortcutModels(false); }} className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs ${shortcutModel === model ? "bg-blue-50 font-semibold text-blue-700" : "text-slate-600 hover:bg-slate-50"}`}><span>{model}</span><span>{model === "Lite" ? "×0.36" : "×3.6"}</span></button>)}</div>}
+                </div>
+                <div className="relative min-w-0">
+                  <button type="button" onClick={() => { setShowProjects((value) => !value); setShowShortcutModels(false); }} className="flex h-9 max-w-48 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"><FolderKanban className="h-4 w-4 text-slate-500" /><span className="truncate">{selectedProject}</span><ChevronDown className="h-3.5 w-3.5 shrink-0" /></button>
+                  {showProjects && <div className="absolute bottom-11 left-0 z-40 w-64 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">{projectOptions.map((project) => <button key={project} type="button" onClick={() => { setSelectedProject(project); setShowProjects(false); }} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs ${selectedProject === project ? "bg-blue-50 font-semibold text-blue-700" : "text-slate-600 hover:bg-slate-50"}`}><FolderKanban className="h-3.5 w-3.5" /><span className="truncate">{project}</span></button>)}</div>}
+                </div>
+              </>
+            ) : <button
               type="button"
               onClick={() => {
                 setShowAgents((value) => !value);
@@ -534,14 +699,14 @@ function AgentComposer({
               aria-expanded={showAgents}
             >
               <CurrentAgentIcon className="h-4 w-4" />
-              {currentAgent.label}
+              {replayModel ?? currentAgent.label}
               <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAgents ? "rotate-180" : ""}`} />
-            </button>
-          </div>
+            </button>}
+          </div>}
           <button
             onClick={onSubmit}
             disabled={!prompt.trim() || disabled}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-950 text-white transition hover:bg-slate-800 active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-200"
+            className={`flex h-10 w-10 items-center justify-center rounded-full bg-slate-950 text-white transition hover:bg-slate-800 active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-200 ${submittingEffect ? "scale-110 ring-4 ring-[#3ea3ff]/30" : ""}`}
             aria-label="发送"
           >
             {disabled ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-5 w-5" />}
@@ -550,6 +715,20 @@ function AgentComposer({
       </div>
     </div>
   );
+}
+
+function AgentLoginPrompt({ isZh, onLogin }: { isZh: boolean; onLogin: () => void }) {
+  return <div className="flex w-full items-center justify-between gap-4 rounded-[22px] border border-[#3ea3ff]/30 bg-[#3ea3ff]/5 px-5 py-4 shadow-[0_18px_55px_-30px_rgba(15,23,42,0.38)]">
+    <div className="flex min-w-0 items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#3ea3ff]/15 text-[#2485df]"><UserRound className="h-4 w-4" /></span><span className="text-sm leading-5 text-slate-600">{isZh ? "登录后可继续向 Agent 提问，并保存研究结果" : "Sign in to continue asking the Agent and save your research results"}</span></div>
+    <button type="button" onClick={onLogin} className="shrink-0 rounded-full bg-[#3ea3ff] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2485df]">{isZh ? "登录" : "Sign In"}</button>
+  </div>;
+}
+
+function AgentLoginComposer({ isZh, onLogin }: { isZh: boolean; onLogin: () => void }) {
+  return <div className="rounded-[22px] border border-slate-200 bg-white p-3.5 text-left shadow-[0_18px_55px_-30px_rgba(15,23,42,0.38)]">
+    <textarea readOnly value="" aria-label={isZh ? "登录后继续对话" : "Sign in to continue the conversation"} placeholder={isZh ? "登录后继续向 Agent 提问…" : "Sign in to ask the Agent a follow-up…"} className="h-16 w-full resize-none bg-transparent px-2 py-1.5 text-[15px] leading-6 text-slate-900 outline-none placeholder:text-slate-400" />
+    <div className="flex items-center justify-between gap-3"><span className="text-xs text-slate-400">{isZh ? "登录后可继续对话" : "Continue the conversation after signing in"}</span><button type="button" onClick={onLogin} className="rounded-full bg-[#3ea3ff] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2485df]">{isZh ? "登录" : "Sign In"}</button></div>
+  </div>;
 }
 
 function GpuConfigPanel() {
@@ -741,6 +920,8 @@ function WorkbenchPanel({
   onTodoStatusChange,
   onAddTodo,
   onStartBioSkill,
+  onStartCommonFunction,
+  onSelectTab,
   canvasFocusNodeId,
   canvasFocusRequest,
 }: {
@@ -754,13 +935,52 @@ function WorkbenchPanel({
   onTodoStatusChange: (id: string, status: AgentTodoStatus) => void;
   onAddTodo: (title: string) => void;
   onStartBioSkill: (prompt: string) => void;
+  onStartCommonFunction: (label: string, detail: string) => void;
+  onSelectTab: (tab: WorkbenchTab) => void;
   canvasFocusNodeId: string | null;
   canvasFocusRequest: number;
 }) {
+  const { isAuthenticated, setAuthenticated } = usePrototypeAuth();
+  const { sessions: globalAskSessions, latestForScene, upsertSession } = useGlobalAskAIHistory("agent");
+  const historyInitialized = React.useRef(false);
   const [expandedTodoId, setExpandedTodoId] = useState<string | null>(null);
   const [menuTodoId, setMenuTodoId] = useState<string | null>(null);
   const [addingTodo, setAddingTodo] = useState(false);
   const [newTodoTitle, setNewTodoTitle] = useState("");
+  const [askInput, setAskInput] = useState("");
+  const [askKnowledgeSource, setAskKnowledgeSource] = useState<"Agent 状态" | "Product Help">("Agent 状态");
+  const [askSourceOpen, setAskSourceOpen] = useState(false);
+  const [askMessages, setAskMessages] = useState<Array<{ role: "user" | "assistant"; text: string }>>([
+    { role: "assistant", text: "我可以旁路读取主 Agent 的运行状态、执行进度和阻塞情况。这里的提问不会打断主 Agent。" },
+  ]);
+  const [askSessionId, setAskSessionId] = useState(() => `agent-${Date.now()}`);
+  const [askHistoryOpen, setAskHistoryOpen] = useState(false);
+  const [askSessions, setAskSessions] = useState<Array<{ id: string; title: string; time: string; messages: Array<{ role: "user" | "assistant"; text: string }> }>>([
+    { id: "agent-progress", title: "Agent 当前进行到哪一步？", time: "今天 10:32", messages: [{ role: "user", text: "Agent 当前进行到哪一步？" }, { role: "assistant", text: "主 Agent 正在整理检索范围，并准备进入文献筛选阶段。" }] },
+  ]);
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setAskKnowledgeSource("Product Help");
+      setAskSourceOpen(false);
+      setAskHistoryOpen(false);
+      setAskMessages([{ role: "assistant", text: "请先登录后使用 Ask AI。登录后可继续提问并访问全局聊天历史。" }]);
+    }
+  }, [isAuthenticated]);
+  useEffect(() => {
+    if (!isAuthenticated || historyInitialized.current) return;
+    historyInitialized.current = true;
+    if (latestForScene) {
+      setAskSessionId(latestForScene.id);
+      setAskKnowledgeSource(latestForScene.source as "Agent 状态" | "Product Help");
+      setAskMessages(latestForScene.messages as Array<{ role: "user" | "assistant"; text: string }>);
+    }
+  }, [isAuthenticated, latestForScene]);
+  useEffect(() => {
+    if (!isAuthenticated) { historyInitialized.current = false; return; }
+    const firstQuestion = askMessages.find((message) => message.role === "user")?.text;
+    if (!firstQuestion) return;
+    upsertSession({ id: askSessionId, scene: "agent", pageLabel: "Agent", title: firstQuestion, source: askKnowledgeSource, messages: askMessages });
+  }, [askKnowledgeSource, askMessages, askSessionId, isAuthenticated, upsertSession]);
   const [activeBioSkill, setActiveBioSkill] = useState("method");
   const [bioScenario, setBioScenario] = useState({
     sampleSize: "medium",
@@ -829,8 +1049,81 @@ function WorkbenchPanel({
     setAddingTodo(false);
   };
 
+  const submitAsk = () => {
+    if (!isAuthenticated) return;
+    const question = askInput.trim();
+    if (!question) return;
+    if (askKnowledgeSource === "Product Help") {
+      setAskMessages((items) => [...items, { role: "user", text: question }, { role: "assistant", text: "我会基于 WisPaper Product Help 回答。你可以询问 Agent、常用功能、搜索、Library、科研画布或 Survey 的使用方法。" }]);
+      setAskInput("");
+      return;
+    }
+    const activeTodo = todos.find((todo) => todo.status === "active");
+    const status = attentionCount > 0
+      ? `主 Agent 当前${running ? "仍在运行" : "已暂停"}，已完成 ${completedCount}/${todos.length} 项，有 ${attentionCount} 项需要处理。${activeTodo ? `当前正在处理“${activeTodo.title}”。` : ""}`
+      : `主 Agent 当前${running ? "正在运行" : "已暂停"}，已完成 ${completedCount}/${todos.length} 项。${activeTodo ? `当前正在处理“${activeTodo.title}”。` : completedCount === todos.length ? "全部步骤已经完成。" : "正在等待下一步任务。"}`;
+    setAskMessages((items) => [...items, { role: "user", text: question }, { role: "assistant", text: status }]);
+    setAskInput("");
+  };
+
+  const startNewAsk = () => {
+    const firstQuestion = askMessages.find((message) => message.role === "user")?.text;
+    if (firstQuestion) setAskSessions((sessions) => [{ id: `agent-ask-${Date.now()}`, title: firstQuestion, time: "刚刚", messages: askMessages }, ...sessions]);
+    setAskSessionId(`agent-${Date.now()}`);
+    setAskMessages([{ role: "assistant", text: "已开启新对话。你可以继续询问主 Agent 的进度、状态或阻塞情况。" }]);
+    setAskInput("");
+    setAskHistoryOpen(false);
+  };
+
   return (
     <div className={`relative h-full ${activeTab === "note" ? "overflow-hidden p-3" : "overflow-y-auto p-5"}`}>
+      {activeTab === "common" && (
+        <section>
+          <p className="text-xs font-medium text-slate-500">Agent 工作台</p>
+          <h3 className="mt-1 text-base font-semibold">常用功能</h3>
+          <p className="mt-1 text-xs leading-5 text-slate-500">选择工具快速开始科研任务。</p>
+          <div className="mt-5 space-y-2">
+            <button type="button" onClick={() => onSelectTab("ask")} className="flex w-full items-start gap-3 rounded-xl border border-blue-200 bg-blue-50/70 p-3 text-left transition hover:bg-blue-50">
+              <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+              <span><span className="block text-sm font-medium text-slate-900">Ask AI</span><span className="mt-0.5 block text-[11px] leading-4 text-slate-500">询问 Agent 当前进度与任务情况</span></span>
+            </button>
+            {commonFunctions.map((item) => (
+              <button key={item.label} type="button" onClick={() => item.label === "配置 GPU" ? onSelectTab("gpu") : onStartCommonFunction(item.label, item.detail)} className="flex w-full items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-blue-200 hover:bg-blue-50/50">
+                <item.icon className="mt-0.5 h-4 w-4 shrink-0 text-slate-600" />
+                <span>
+                  <span className="block text-sm font-medium text-slate-900">{item.label}</span>
+                  <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">{item.detail}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+      {activeTab === "ask" && (
+        <section className="flex min-h-full flex-col">
+          {isAuthenticated && <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-3">
+            <button type="button" onClick={startNewAsk} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-600 hover:bg-white"><Plus className="h-3.5 w-3.5" />新对话</button>
+            <button type="button" onClick={() => setAskHistoryOpen((value) => !value)} className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium ${askHistoryOpen ? "bg-blue-50 text-blue-600" : "text-slate-600 hover:bg-white"}`}><History className="h-3.5 w-3.5" />历史对话</button>
+          </div>}
+          <div className="flex-1 space-y-3">
+            {askHistoryOpen ? <div><p className="mb-2 text-[10px] text-slate-400">{globalAskSessions.length} 个全局历史对话</p><div className="divide-y divide-slate-200">{globalAskSessions.map((session) => <button key={session.id} type="button" onClick={() => { setAskSessionId(session.id); setAskMessages(session.messages as Array<{ role: "user" | "assistant"; text: string }>); setAskKnowledgeSource(session.source === "Agent 状态" ? "Agent 状态" : "Product Help"); setAskHistoryOpen(false); }} className="w-full py-3 text-left"><span className="block truncate text-xs font-medium text-slate-800">{session.title}</span><span className="mt-1 block text-[10px] text-slate-400">{session.pageLabel} · {session.source} · {session.time}</span></button>)}</div></div> : <>
+            {askMessages.map((message, index) => (
+              <div key={`${message.role}-${index}`} className={`max-w-[92%] rounded-xl px-3 py-2.5 text-xs leading-5 ${message.role === "user" ? "ml-auto bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>
+                {message.text}
+              </div>
+            ))}
+            </>}
+          </div>
+          <div className="sticky bottom-0 mt-4 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+            {!isAuthenticated && <div className="mb-2 rounded-lg border border-blue-100 bg-blue-50 p-2.5"><p className="text-[11px] leading-4 text-slate-600">请先登录后使用 Ask AI。登录后可询问 Agent 状态，并访问全局聊天历史。</p><button type="button" onClick={() => setAuthenticated(true)} className="mt-2 rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white">注册 / 登录</button></div>}
+            <textarea value={askInput} disabled={!isAuthenticated} onChange={(event) => setAskInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submitAsk(); } }} rows={2} placeholder="例如：Agent 现在进行到哪一步？" className="w-full resize-none border-0 bg-transparent px-1 text-xs leading-5 outline-none placeholder:text-slate-400" />
+            <div className="flex items-center justify-between">
+              <div className="relative"><button type="button" disabled={!isAuthenticated} onClick={() => setAskSourceOpen((value) => !value)} className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-[11px] font-medium text-slate-600 hover:bg-slate-100 disabled:cursor-default"><FileText className="h-3.5 w-3.5" />{askKnowledgeSource}<ChevronDown className="h-3 w-3" /></button>{askSourceOpen && isAuthenticated && <div className="absolute bottom-9 left-0 z-20 w-36 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">{(["Agent 状态", "Product Help"] as const).map((source) => <button key={source} type="button" onClick={() => { setAskKnowledgeSource(source); setAskSourceOpen(false); }} className={`w-full rounded-lg px-3 py-2 text-left text-xs ${askKnowledgeSource === source ? "bg-blue-50 font-medium text-blue-600" : "text-slate-600 hover:bg-slate-50"}`}>{source}</button>)}</div>}</div>
+              <div className="flex items-center gap-2"><button type="button" onClick={submitAsk} disabled={!askInput.trim()} aria-label="询问 Agent 状态" className="rounded-lg bg-slate-900 p-1.5 text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button></div>
+            </div>
+          </div>
+        </section>
+      )}
       {activeTab === "note" && (
         <section className="h-full min-h-0">
           <ResearchTree key={activeTab} projectId={1} projectTitle="LLM 长期记忆研究" initialTemplate="demo" focusNodeId={canvasFocusNodeId ?? "n2"} focusRequest={canvasFocusRequest} noteOnly />
@@ -1144,39 +1437,212 @@ function WorkbenchPanel({
   );
 }
 
-export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenProjects: () => void; initialPrompt?: string }) {
+export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPrompt = "" }: { onOpenProjects: () => void; onOpenSearch: (query: string) => void; onLogin: () => void; initialPrompt?: string }) {
+  const { language } = useLanguage();
+  const { isAuthenticated, setAuthenticated } = usePrototypeAuth();
+  const isZh = language === "zh";
+  const handleAgentLogin = () => { setAuthenticated(true); onLogin(); };
   const linkedConversation = useMemo(() => {
     if (typeof window === "undefined") return null;
     const params = new URLSearchParams(window.location.search);
     if (params.get("source") !== "research-note" || !params.get("agentName")) return null;
     return { agentName: params.get("agentName")!, message: params.get("message")?.trim() || "" };
   }, []);
+  const linkedAgentSession = useMemo<AgentRouteSession | null>(() => {
+    if (typeof window === "undefined") return null;
+    const match = window.location.pathname.match(/^\/app\/agent\/([0-9a-f-]+)\/?$/i);
+    if (!match) return null;
+    try { return JSON.parse(window.localStorage.getItem(`wispaper-agent-session:${match[1]}`) || "null"); } catch { return null; }
+  }, []);
   const [prompt, setPrompt] = useState("");
-  const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
-  const [started, setStarted] = useState(Boolean(linkedConversation));
+  const [onboardingOpen, setOnboardingOpen] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try { return window.localStorage.getItem("wispaper-agent-onboarding-v1") !== "done"; } catch { return true; }
+  });
+  const [onboardingStep, setOnboardingStep] = useState<"discipline" | "need">("discipline");
+  const [onboardingDiscipline, setOnboardingDiscipline] = useState("");
+  const [onboardingNeed, setOnboardingNeed] = useState("");
+  const onboardingInputRef = useRef<HTMLDivElement>(null);
+  const landingInputRef = useRef<HTMLDivElement>(null);
+  const [inputFlight, setInputFlight] = useState<{ from: DOMRect; to: DOMRect; text: string; task: string | null; moving: boolean } | null>(null);
+  const [landingPhase, setLandingPhase] = useState<"idle" | "waiting" | "revealing">("idle");
+  const [introProgress, setIntroProgress] = useState([0, 0]);
+  const [needProgress, setNeedProgress] = useState(0);
+  const [selectedSkill, setSelectedSkill] = useState<string | null>(linkedAgentSession?.skill ?? null);
+  const [started, setStarted] = useState(Boolean(linkedConversation || linkedAgentSession));
   const [running, setRunning] = useState(false);
-  const [planReady, setPlanReady] = useState(Boolean(linkedConversation));
-  const [planAccepted, setPlanAccepted] = useState(false);
-  const [todos, setTodos] = useState<AgentTodo[]>(initialAgentTodos);
-  const [activeTab, setActiveTab] = useState<WorkbenchTab>("plan");
+  const [planReady, setPlanReady] = useState(Boolean(linkedConversation || linkedAgentSession));
+  const [planAccepted, setPlanAccepted] = useState(linkedAgentSession?.kind === "case");
+  const [todos, setTodos] = useState<AgentTodo[]>(() => linkedAgentSession?.kind === "case" ? initialAgentTodos.map((todo) => ({ ...todo, status: "done" as AgentTodoStatus })) : initialAgentTodos);
+  const [activeTab, setActiveTab] = useState<WorkbenchTab>("common");
   const [panelOpen, setPanelOpen] = useState(true);
-  const [taskTitle, setTaskTitle] = useState(linkedConversation?.agentName || "新研究任务");
-  const [messages, setMessages] = useState<{ role: "user" | "agent"; text: string }[]>(() => linkedConversation
+  const [taskTitle, setTaskTitle] = useState(linkedAgentSession?.title || linkedConversation?.agentName || "新研究任务");
+  const [messages, setMessages] = useState<{ role: "user" | "agent"; text: string }[]>(() => linkedAgentSession?.messages ?? (linkedConversation
     ? linkedConversation.message
       ? [{ role: "user", text: linkedConversation.message }, { role: "agent", text: `${linkedConversation.agentName} 已收到消息，正在结合当前科研项目与笔记内容继续处理。` }]
       : [{ role: "agent", text: `已进入 ${linkedConversation.agentName} 对话。你可以继续发送问题或补充科研笔记中的上下文。` }]
-    : []);
+    : []));
   const [selectedAgent, setSelectedAgent] = useState<AgentTierId>("balanced");
-  const [activeCaseTab, setActiveCaseTab] = useState(quickTasks[0].title);
+  const activeCaseTab = quickTasks[0].title;
+  const [activeLaunchShortcut, setActiveLaunchShortcut] = useState<string | null>(null);
+  const [caseSubmitting, setCaseSubmitting] = useState(false);
+  const [caseReplay, setCaseReplay] = useState<{ title: string; summary: string; outcome: string; model: "Lite" | "Pro" } | null>(linkedAgentSession?.replay ?? null);
+  const caseFillTimersRef = useRef<number[]>([]);
+  const replayMessagesEndRef = useRef<HTMLDivElement>(null);
   const [canvasContextCount, setCanvasContextCount] = useState(0);
   const [canvasFocusNodeId, setCanvasFocusNodeId] = useState<string | null>(null);
   const [canvasFocusRequest, setCanvasFocusRequest] = useState(0);
   const taskCompleted = planAccepted && todos.every((todo) => todo.status === "done" || todo.status === "skipped");
   const taskNeedsAttention = planAccepted && todos.some((todo) => todo.status === "waiting" || todo.status === "blocked" || todo.status === "failed");
-  const activeSamplePrompts = quickTaskSamplePrompts[activeCaseTab] ?? [];
   const activeCaseStudies = quickTaskCaseStudies[activeCaseTab] ?? [];
   const activeCaseTask = quickTasks.find((task) => task.title === activeCaseTab) ?? quickTasks[0];
   const activeCaseImage = quickTaskCaseImages[activeCaseTab] ?? inspirationDiscoveryImage;
+  const selectedShortcut = launchShortcuts.find((shortcut) => shortcut.title === activeLaunchShortcut);
+  const visibleCases: AgentCaseStudy[] = selectedShortcut
+    ? selectedShortcut.samples.map((sample) => ({ ...sample, field: selectedShortcut.title, outcome: sample.prompt }))
+    : activeCaseStudies;
+  const visibleCaseImage = selectedShortcut ? quickTaskCaseImages[selectedShortcut.title] ?? activeCaseImage : activeCaseImage;
+  const visibleCaseIcon = selectedShortcut?.icon ?? activeCaseTask.icon;
+
+  useEffect(() => () => caseFillTimersRef.current.forEach(window.clearTimeout), []);
+  useEffect(() => { if (caseReplay || (!isAuthenticated && started)) replayMessagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [caseReplay, isAuthenticated, started, messages.length]);
+  useEffect(() => {
+    if (!started || !messages.length) return;
+    const match = window.location.pathname.match(/^\/app\/agent\/([0-9a-f-]+)\/?$/i);
+    if (!match) return;
+    const session: AgentRouteSession = { kind: caseReplay ? "case" : "task", title: taskTitle, skill: selectedSkill, messages, ...(caseReplay ? { replay: caseReplay } : {}) };
+    try { window.localStorage.setItem(`wispaper-agent-session:${match[1]}`, JSON.stringify(session)); } catch { /* prototype storage */ }
+  }, [started, taskTitle, selectedSkill, messages, caseReplay]);
+
+  const playCase = (title: string, casePrompt: string, summary: string, outcome: string, skill: string) => {
+    caseFillTimersRef.current.forEach(window.clearTimeout);
+    caseFillTimersRef.current = [];
+    setSelectedSkill(skill);
+    setPrompt("");
+    setCaseSubmitting(false);
+    landingInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const characters = Array.from(casePrompt);
+    const stepMs = Math.max(14, Math.min(30, 1050 / Math.max(characters.length, 1)));
+    characters.forEach((_, index) => {
+      caseFillTimersRef.current.push(window.setTimeout(() => setPrompt(characters.slice(0, index + 1).join("")), (index + 1) * stepMs));
+    });
+    const typingMs = characters.length * stepMs;
+    caseFillTimersRef.current.push(window.setTimeout(() => setCaseSubmitting(true), typingMs + 180));
+    caseFillTimersRef.current.push(window.setTimeout(() => {
+      const resultBySkill: Record<string, string> = isZh
+        ? { "搜索文献": "已整理代表性论文、核心方法、数据集与评测指标。", "文献综述": "已形成综述提纲、研究脉络和可追溯的证据表。", "灵感发现": "已提出三个可检验的研究方向，并标出优先验证路径。", "论文评审": "已汇总论文的主要优点、关键问题与修改建议。" }
+        : { "搜索文献": "Representative papers, methods, datasets, and evaluation metrics are organized.", "文献综述": "A review outline, research trajectory, and traceable evidence table are ready.", "灵感发现": "Three testable research directions and validation priorities are ready.", "论文评审": "The paper's strengths, critical issues, and revision suggestions are summarized." };
+      const finalOutput = resultBySkill[skill] ?? outcome;
+      const replay = { title, summary, outcome, model: skill === "搜索文献" ? "Lite" as const : "Pro" as const };
+      const history: AgentRouteSession["messages"] = [{ role: "user", text: casePrompt }, { role: "agent", text: isZh ? `「${title}」已完成。${summary}\n\n交付结果：${finalOutput}` : `“${title}” is complete. ${summary}\n\nDeliverable: ${finalOutput}` }];
+      setCaseSubmitting(false);
+      setCaseReplay(replay);
+      setTaskTitle(title);
+      setMessages(history);
+      setTodos(initialAgentTodos.map((todo) => ({ ...todo, status: "done" as AgentTodoStatus })));
+      setPlanReady(true);
+      setPlanAccepted(true);
+      setRunning(false);
+      setActiveTab("common");
+      setStarted(true);
+      setPrompt("");
+      openAgentSessionRoute({ kind: "case", title, skill, messages: history, replay });
+    }, typingMs + 520));
+  };
+
+  const disciplineOptions = isZh
+    ? ["计算机与 AI", "生物医学", "材料与化学", "经济与金融", "社会科学"]
+    : ["Computer Science & AI", "Biomedicine", "Materials & Chemistry", "Economics & Finance", "Social Sciences"];
+  const disciplineIndex = disciplineOptions.indexOf(onboardingDiscipline);
+  const researchTopic = isZh
+    ? (["多模态 Agent 评测", "非小细胞肺癌免疫治疗", "钙钛矿太阳能电池稳定性", "人工智能对企业生产率的影响", "短视频使用与青少年心理健康"][disciplineIndex] ?? `${onboardingDiscipline || "该学科"}的前沿研究`)
+    : (["multimodal agent evaluation", "immunotherapy for non-small-cell lung cancer", "perovskite solar cell stability", "AI and firm productivity", "social media use and adolescent mental health"][disciplineIndex] ?? `emerging research in ${onboardingDiscipline || "your field"}`);
+  const englishResearchTopic = ["multimodal agent evaluation", "immunotherapy for non-small-cell lung cancer", "perovskite solar cell stability", "AI and firm productivity", "social media use and adolescent mental health"][disciplineIndex] ?? `emerging research in ${onboardingDiscipline || "your field"}`;
+  const englishNeedOptions = [`[Literature Review] Write a review of ${englishResearchTopic}`, `[Idea Discovery] Find research gaps in ${englishResearchTopic}`, `[Paper Review] Review a paper on ${englishResearchTopic}`, `[Paper Search] Find recent papers on ${englishResearchTopic}`, `[Experiment Design] Design a study on ${englishResearchTopic}`];
+  const needOptions = isZh
+    ? [`[文献综述] 做一个关于${researchTopic}的文献综述`, `[灵感发现] 寻找${researchTopic}中的科研空白点`, `[论文评审] 评审一篇关于${researchTopic}的论文`, `[搜索文献] 查找${researchTopic}的最新论文`, `[实验设计] 为${researchTopic}设计研究方案`]
+    : englishNeedOptions;
+  const introLines = isZh
+    ? ["你好，我是 WisPaper,你的云端科研助手。", "为了更好的帮助你,请告诉我你的研究领域。"]
+    : ["Hi, I’m WisPaper, your cloud research assistant.", "To better support your research, please tell me which field you primarily work in."];
+  const needLine = isZh ? "明白了。你可以把任务布置给我，即使合上电脑，我也会在云端为你执行。" : "Got it. Assign me a task and, even after you close your computer, I’ll keep working on it in the cloud.";
+  const responseReady = onboardingStep === "discipline" ? introProgress[1] === introLines[1].length : needProgress === needLine.length;
+
+  useEffect(() => {
+    if (!onboardingOpen) return;
+    setIntroProgress([0, 0]);
+    let line = 0;
+    let char = 0;
+    let timer: number;
+    const tick = () => {
+      const lineIndex = line;
+      const nextChar = char + 1;
+      char = nextChar;
+      setIntroProgress((current) => current.map((count, index) => index === lineIndex ? nextChar : count));
+      if (char >= introLines[line].length) {
+        line += 1;
+        char = 0;
+        if (line >= introLines.length) return;
+        timer = window.setTimeout(tick, 380);
+      } else timer = window.setTimeout(tick, lineIndex === 1 && introLines[lineIndex][nextChar - 1] === "," ? 600 : 28);
+    };
+    timer = window.setTimeout(tick, 350);
+    return () => window.clearTimeout(timer);
+  }, [onboardingOpen, language]);
+
+  useEffect(() => {
+    if (!onboardingOpen || onboardingStep !== "need") return;
+    setNeedProgress(0);
+    let char = 0;
+    let timer: number;
+    const tick = () => {
+      char += 1;
+      setNeedProgress(char);
+      if (char < needLine.length) timer = window.setTimeout(tick, 28);
+    };
+    timer = window.setTimeout(tick, 450);
+    return () => window.clearTimeout(timer);
+  }, [onboardingOpen, onboardingStep, language]);
+
+  const finishOnboarding = (needOverride?: string) => {
+    const submitted = (needOverride ?? onboardingNeed).trim();
+    const taskMatch = submitted.match(/^\[([^\]]+)\]\s*(.*)$/);
+    const task = taskMatch?.[1] ?? null;
+    const value = taskMatch?.[2] ?? submitted;
+    if (!value) return;
+    const from = onboardingInputRef.current?.getBoundingClientRect();
+    try { window.localStorage.setItem("wispaper-agent-onboarding-v1", "done"); } catch { /* prototype storage */ }
+    if (task) flushSync(() => setSelectedSkill(({ "Literature Review": "文献综述", "Idea Discovery": "灵感发现", "Paper Review": "论文评审", "Paper Search": "搜索文献", "Experiment Design": "实验设计" } as Record<string, string>)[task] ?? task));
+    const to = landingInputRef.current?.getBoundingClientRect();
+    if (from && to) {
+      setLandingPhase("waiting");
+      setInputFlight({ from, to, text: value, task, moving: false });
+      window.requestAnimationFrame(() => window.requestAnimationFrame(() => setInputFlight((flight) => flight ? { ...flight, moving: true } : null)));
+      window.setTimeout(() => {
+        setPrompt(value);
+        setInputFlight(null);
+        setLandingPhase("revealing");
+        window.setTimeout(() => setLandingPhase("idle"), 700);
+      }, 780);
+    } else setPrompt(value);
+    setOnboardingOpen(false);
+  };
+  const closeOnboarding = () => {
+    try { window.localStorage.setItem("wispaper-agent-onboarding-v1", "done"); } catch { /* prototype storage */ }
+    setOnboardingOpen(false);
+  };
+
+  useEffect(() => {
+    const retrigger = () => {
+      try { window.localStorage.removeItem("wispaper-agent-onboarding-v1"); } catch { /* prototype storage */ }
+      setOnboardingStep("discipline");
+      setOnboardingDiscipline("");
+      setOnboardingNeed("");
+      setOnboardingOpen(true);
+    };
+    window.addEventListener("wispaper:retrigger-agent-onboarding", retrigger);
+    return () => window.removeEventListener("wispaper:retrigger-agent-onboarding", retrigger);
+  }, []);
 
   const selectQuickTask = (task: QuickTask, includePrompt: boolean) => {
     setSelectedSkill(task.title);
@@ -1220,20 +1686,26 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
   const submit = (text = prompt) => {
     const value = text.trim();
     if (!value || running) return;
+    if (selectedSkill === "搜索文献" && !caseReplay) {
+      onOpenSearch(value);
+      return;
+    }
     const modifiesCanvas = /修改|更新|改写|调整/.test(value) && /科研画布|节点|卡片/.test(value);
     const canvasNodesRead = accessCanvasContext(modifiesCanvas ? "修改中" : "访问中");
     const startingTask = !started;
     if (startingTask) {
-      setTaskTitle(value.length > 32 ? `${value.slice(0, 32)}…` : value);
+      const title = value.length > 32 ? `${value.slice(0, 32)}…` : value;
+      setTaskTitle(title);
       setPlanReady(false);
       setPlanAccepted(false);
       setTodos(initialAgentTodos.map((todo) => ({ ...todo })));
+      openAgentSessionRoute({ kind: "task", title, skill: selectedSkill, messages: [{ role: "user", text: value }, { role: "agent", text: "任务已接收，正在制定研究计划。" }] });
     }
     setStarted(true);
     setPrompt("");
     setSelectedSkill(null);
     setRunning(true);
-    setActiveTab("plan");
+    setActiveTab("common");
     setMessages((items) => [...items, { role: "user", text: value }]);
     window.setTimeout(() => {
       setMessages((items) => [
@@ -1322,33 +1794,83 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
   if (!started) {
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#f7f9fc] text-slate-950">
-        <header className="flex h-16 shrink-0 items-center justify-between px-7">
+        {onboardingOpen && (
+          <div className="fixed inset-0 z-[1600] overflow-y-auto bg-[#f7f9fc] text-slate-950 animate-in fade-in duration-300">
+            <div className="flex min-h-screen flex-col justify-center px-6 py-10">
+              <div className="mx-auto w-full max-w-3xl space-y-7">
+                <div className="flex items-start gap-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                  <span className="mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-blue-600 text-white"><Sparkles className="h-4 w-4" /></span>
+                  <div className="max-w-2xl rounded-3xl rounded-tl-md bg-white px-5 py-4 text-[17px] leading-7 shadow-sm ring-1 ring-slate-200/70">
+                    {introLines[0].slice(0, introProgress[0])}{introProgress[0] < introLines[0].length && <span className="animate-pulse text-blue-600">▍</span>}
+                  </div>
+                </div>
+                {introProgress[1] > 0 && <div className="ml-11 max-w-2xl rounded-3xl rounded-tl-md bg-white px-5 py-4 text-[17px] leading-7 shadow-sm ring-1 ring-slate-200/70 animate-in fade-in slide-in-from-bottom-2 duration-500">{introLines[1].slice(0, introProgress[1])}{introProgress[1] < introLines[1].length && <span className="animate-pulse text-blue-600">▍</span>}</div>}
+                {onboardingStep === "need" && (
+                  <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="flex items-start justify-end gap-3"><div className="rounded-3xl rounded-tr-md bg-blue-600 px-5 py-3 text-sm font-medium text-white">{onboardingDiscipline}</div><span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-slate-200 text-slate-600" aria-label={isZh ? "用户" : "You"}><UserRound className="h-4 w-4" /></span></div>
+                    <div className="flex items-start gap-3">
+                      <span className="mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-blue-600 text-white"><Sparkles className="h-4 w-4" /></span>
+                      {needProgress > 0 && <div className="max-w-2xl rounded-3xl rounded-tl-md bg-white px-5 py-4 text-[17px] leading-7 shadow-sm ring-1 ring-slate-200/70">{needLine.slice(0, needProgress)}{needProgress < needLine.length && <span className="animate-pulse text-blue-600">▍</span>}</div>}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+            {responseReady && <footer className="mx-auto w-full max-w-3xl pt-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="ml-11 w-[calc(100%-2.75rem)] max-w-[520px]">
+                <div className="mb-3 flex flex-col items-start gap-2">
+                  {(onboardingStep === "discipline" ? disciplineOptions : needOptions).map((item, index) => {
+                    const selected = onboardingStep === "discipline" ? onboardingDiscipline === item : onboardingNeed === item;
+                    const optionMatch = onboardingStep === "need" ? item.match(/^\[([^\]]+)\]\s*(.*)$/) : null;
+                    return <button key={item} type="button" onClick={() => { if (onboardingStep === "discipline") { setOnboardingDiscipline(item); setOnboardingStep("need"); } else { setOnboardingNeed(item); finishOnboarding(item); } }} style={{ animationDelay: `${index * 75}ms`, animationFillMode: "both" }} className={`group flex w-full animate-in fade-in slide-in-from-bottom-2 items-center justify-between gap-5 rounded-xl border px-4 py-2.5 text-left text-sm font-medium transition duration-300 hover:translate-x-1 ${selected ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-700 hover:shadow-sm"}`}><span className="flex min-w-0 items-center gap-2">{optionMatch && <span className="shrink-0 rounded-md bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">{optionMatch[1]}</span>}<span>{optionMatch?.[2] ?? item}</span></span><ArrowUpRight className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:-translate-y-0.5 group-hover:text-blue-600" /></button>;
+                  })}
+                </div>
+                <div ref={onboardingInputRef}>
+                  <AgentComposer
+                    prompt={onboardingStep === "discipline" ? onboardingDiscipline : onboardingNeed}
+                    setPrompt={onboardingStep === "discipline" ? setOnboardingDiscipline : setOnboardingNeed}
+                    onSubmit={() => onboardingStep === "discipline" ? onboardingDiscipline.trim() && setOnboardingStep("need") : finishOnboarding()}
+                    selectedAgent={selectedAgent}
+                    onAgentChange={setSelectedAgent}
+                    selectedSkill={null}
+                    onSelectSkill={selectQuickTask}
+                    onClearSkill={clearSkill}
+                    onboardingMode
+                    placeholderOverride={onboardingStep === "discipline" ? (isZh ? "输入你的研究领域…" : "Type your research field…") : (isZh ? "输入你希望完成的科研任务…" : "Describe the research task you want to complete…")}
+                  />
+                </div>
+              </div>
+            </footer>}
+            </div>
+            <div className="fixed bottom-4 right-6 flex items-center gap-3 text-xs text-slate-500 opacity-50 transition-opacity hover:opacity-100 focus-within:opacity-100">
+              <button type="button" onClick={() => { handleAgentLogin(); closeOnboarding(); }} className="hover:text-blue-600">{isZh ? "登录" : "Sign In"}</button>
+            </div>
+          </div>
+        )}
+        {inputFlight && <div aria-hidden="true" className="pointer-events-none fixed z-[1700] overflow-hidden rounded-[22px] border border-slate-200 bg-white p-3.5 text-left shadow-[0_18px_55px_-30px_rgba(15,23,42,0.38)]" style={{ left: inputFlight.moving ? inputFlight.to.left : inputFlight.from.left, top: inputFlight.moving ? inputFlight.to.top : inputFlight.from.top, width: inputFlight.moving ? inputFlight.to.width : inputFlight.from.width, height: inputFlight.moving ? inputFlight.to.height : inputFlight.from.height, transition: "left 780ms cubic-bezier(0.22, 1, 0.36, 1), top 780ms cubic-bezier(0.22, 1, 0.36, 1), width 780ms cubic-bezier(0.22, 1, 0.36, 1), height 780ms cubic-bezier(0.22, 1, 0.36, 1)" }}><div className="flex h-28 items-start gap-2 px-2 py-2 text-[15px] leading-6 text-slate-900">{inputFlight.task && <span className="shrink-0 rounded-xl bg-slate-100 px-3 py-1.5 text-sm font-medium">{inputFlight.task}</span>}<span className="line-clamp-3">{inputFlight.text}</span></div><div className="flex justify-end"><span className="grid h-10 w-10 place-items-center rounded-full bg-slate-950 text-white"><ArrowUp className="h-5 w-5" /></span></div></div>}
+        <header className={`flex h-16 shrink-0 items-center justify-between px-7 ${landingPhase === "waiting" ? "opacity-0" : landingPhase === "revealing" ? "animate-in fade-in duration-700" : ""}`}>
           <div className="flex items-center gap-2.5 text-sm font-semibold">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-950 text-white">
               <Bot className="h-4 w-4" />
             </span>
-            学术 Agent
+            {isZh ? "学术 Agent" : "Academic Agent"}
           </div>
           <button
             onClick={onOpenProjects}
             className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-white hover:text-slate-950"
           >
             <FolderKanban className="h-4 w-4" />
-            研究项目
+            {isZh ? "研究项目" : "Research Projects"}
           </button>
         </header>
 
-        <main className="flex flex-1 items-start overflow-y-auto px-6 pb-14 pt-12">
+        <main className={`flex flex-1 items-start overflow-y-auto px-6 pb-14 pt-[clamp(132px,22vh,280px)] ${landingPhase === "waiting" ? "opacity-0" : landingPhase === "revealing" ? "animate-in fade-in duration-700" : ""}`}>
           <div className="mx-auto w-full max-w-4xl">
             <div className="mx-auto max-w-3xl text-center">
-              <p className="text-sm font-medium text-slate-500">从一个研究问题开始</p>
-              <h1 className="mt-3 text-[42px] font-semibold leading-[1.08] tracking-[-0.04em] text-slate-950">
-                今天想推进哪项研究？
+              <h1 className="text-[42px] font-semibold leading-[1.08] tracking-[-0.04em] text-slate-950">
+                {isZh ? "你好,今天想执行什么科研任务" : "Hi, what research task to run today?"}
               </h1>
-              <p className="mx-auto mt-4 max-w-xl text-[15px] leading-7 text-slate-500">
-                描述目标，Agent 会拆解步骤、调用研究工具，并把论文、计划与实验产物集中保存。
-              </p>
-              <div className="mt-9">
+              <div ref={landingInputRef} className="mt-8">
                 <AgentComposer
                   prompt={prompt}
                   setPrompt={setPrompt}
@@ -1358,83 +1880,43 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
                   selectedSkill={selectedSkill}
                   onSelectSkill={selectQuickTask}
                   onClearSkill={clearSkill}
+                  submittingEffect={caseSubmitting}
                 />
+              </div>
+              <div className="mt-5 flex flex-wrap justify-center gap-2.5" aria-label={isZh ? "任务快捷方式" : "Task shortcuts"}>
+                {launchShortcuts.map((shortcut) => {
+                  const Icon = shortcut.icon;
+                  const active = activeLaunchShortcut === shortcut.title;
+                  return <button key={shortcut.title} type="button" onClick={() => {
+                    setActiveLaunchShortcut(active ? null : shortcut.title);
+                    setSelectedSkill(active ? null : shortcut.title);
+                  }} className={`inline-flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-medium shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${active ? "border-[#3ea3ff] bg-[#3ea3ff]/10 text-[#2485df]" : "border-slate-200 bg-white text-slate-600 hover:border-[#3ea3ff] hover:text-slate-950"}`}><Icon className="h-4 w-4 text-[#3ea3ff]" />{isZh ? shortcut.title : launchShortcutEnglish[shortcut.title]?.title ?? shortcut.title}</button>;
+                })}
               </div>
             </div>
 
-            <section className="mx-auto mt-8 max-w-3xl" aria-label="Skill 案例">
-              <div className="flex flex-wrap justify-center gap-2.5" role="tablist" aria-label="Skill 案例分类">
-                {quickTasks.map((task) => {
-                  const Icon = task.icon;
-                  const isActiveCaseTab = activeCaseTab === task.title;
-                  return (
-                    <button
-                      key={task.title}
-                      type="button"
-                      role="tab"
-                      id={`agent-case-tab-${task.title}`}
-                      aria-controls={`agent-case-panel-${task.title}`}
-                      onClick={() => {
-                        setActiveCaseTab(task.title);
-                        selectQuickTask(task, true);
-                      }}
-                      className={`group inline-flex items-center gap-2 rounded-full border px-3.5 py-2.5 text-sm transition hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 ${
-                        isActiveCaseTab
-                          ? "border-slate-300 bg-white text-slate-950 shadow-sm"
-                          : "border-slate-200 bg-white/70 text-slate-600 hover:border-slate-300 hover:bg-white hover:text-slate-950"
-                      }`}
-                      aria-selected={isActiveCaseTab}
-                    >
-                      <Icon className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
-                      {task.title}
-                    </button>
-                  );
-                })}
-              </div>
-
+            <section className="mx-auto mt-16 max-w-3xl" aria-label={isZh ? "案例" : "Cases"}>
               <div
                 id={`agent-case-panel-${activeCaseTab}`}
                 role="tabpanel"
-                aria-labelledby={`agent-case-tab-${activeCaseTab}`}
-                className="mt-6"
               >
-                <h2 className="text-sm font-semibold text-slate-900">Sample Prompts</h2>
+                <h2 className="text-sm font-semibold text-slate-900">{isZh ? "案例" : "Cases"}</h2>
                 <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  {activeSamplePrompts.map((item) => {
+                  {visibleCases.map((item, index) => {
+                    const StudyIcon = visibleCaseIcon;
+                    const englishItem = selectedShortcut
+                      ? { title: launchShortcutEnglish[selectedShortcut.title]?.samples[index]?.title ?? item.title, field: launchShortcutEnglish[selectedShortcut.title]?.title ?? item.field, summary: launchShortcutEnglish[selectedShortcut.title]?.samples[index]?.prompt ?? item.summary, outcome: launchShortcutEnglish[selectedShortcut.title]?.samples[index]?.prompt ?? item.outcome, prompt: launchShortcutEnglish[selectedShortcut.title]?.samples[index]?.prompt ?? item.prompt }
+                      : defaultCaseStudyEnglish[index];
                     return (
                       <button
                         key={item.title}
                         type="button"
-                        onClick={() => {
-                          setSelectedSkill(activeCaseTask.title);
-                          setPrompt(item.prompt);
-                        }}
-                        className="group rounded-2xl border border-slate-200 bg-white/75 p-4 text-left transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white hover:shadow-[0_18px_45px_-28px_rgba(15,23,42,0.35)] active:translate-y-0"
-                      >
-                        <h3 className="text-[15px] font-semibold leading-6 text-slate-900">{item.title}</h3>
-                        <p className="mt-1.5 text-xs leading-5 text-slate-500">{item.summary}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <h2 className="mt-8 text-sm font-semibold text-slate-900">案例</h2>
-                <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  {activeCaseStudies.map((item, index) => {
-                    const StudyIcon = activeCaseTask.icon;
-                    return (
-                      <button
-                        key={item.title}
-                        type="button"
-                        onClick={() => {
-                          setSelectedSkill(activeCaseTask.title);
-                          setPrompt(item.prompt);
-                        }}
+                        onClick={() => playCase(isZh ? item.title : englishItem?.title ?? item.title, isZh ? item.prompt : englishItem?.prompt ?? item.prompt, isZh ? item.summary : englishItem?.summary ?? item.summary, isZh ? item.outcome : englishItem?.outcome ?? item.outcome, selectedShortcut?.title ?? activeCaseTask.title)}
                         className="group flex min-h-[410px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-left transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_22px_55px_-30px_rgba(15,23,42,0.4)] active:translate-y-0"
                       >
                         <div className="relative h-40 overflow-hidden bg-slate-100">
                           <img
-                            src={activeCaseImage}
+                            src={visibleCaseImage}
                             alt=""
                             className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                             style={{ objectPosition: index === 0 ? "left center" : index === 2 ? "right center" : "center" }}
@@ -1448,16 +1930,16 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
                           </span>
                         </div>
                         <div className="px-4 pb-3 pt-4">
-                          <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-600">
-                            {item.field}
+                          <span className="inline-flex rounded-full bg-[#3ea3ff]/10 px-2.5 py-1 text-[11px] font-medium text-[#2485df]">
+                            {isZh ? item.field : englishItem?.field ?? item.field}
                           </span>
                         </div>
                         <div className="flex-1 px-4 pb-4">
-                          <h3 className="text-base font-semibold leading-6 text-slate-900">{item.title}</h3>
-                          <p className="mt-3 text-xs leading-5 text-slate-500">{item.summary}</p>
+                          <h3 className="text-base font-semibold leading-6 text-slate-900">{isZh ? item.title : englishItem?.title ?? item.title}</h3>
+                          <p className="mt-3 text-xs leading-5 text-slate-500">{isZh ? item.summary : englishItem?.summary ?? item.summary}</p>
                         </div>
                         <div className="border-t border-slate-100 bg-slate-50/80 px-4 py-3">
-                          <p className="text-xs font-medium leading-5 text-slate-600">{item.outcome}</p>
+                          <p className="flex items-center justify-between gap-2 text-xs font-medium leading-5 text-slate-600"><span className="line-clamp-2">{isZh ? item.outcome : englishItem?.outcome ?? item.outcome}</span><span className="shrink-0 text-[#3ea3ff]">{isZh ? "播放回放" : "Replay"} <ArrowUpRight className="inline h-3.5 w-3.5" /></span></p>
                         </div>
                       </button>
                     );
@@ -1467,6 +1949,7 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
             </section>
           </div>
         </main>
+        <GlobalAskAIDrawer page="academic-agent-entry" />
       </div>
     );
   }
@@ -1477,6 +1960,7 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
         <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-100 px-6">
           <h1 className="min-w-0 truncate pr-6 text-[15px] font-semibold">{taskTitle}</h1>
           <div className="flex shrink-0 items-center gap-2 text-xs text-slate-500">
+            {caseReplay && <span className="rounded-lg bg-[#3ea3ff]/10 px-2.5 py-1.5 font-semibold text-[#2485df]">{isZh ? "案例回放" : "Case replay"}</span>}
             {canvasContextCount > 0 && <span className="hidden items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-violet-700 sm:inline-flex"><FolderKanban className="h-3.5 w-3.5" />科研画布 · {canvasContextCount} 节点</span>}
             <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5">
               <span className={`h-2 w-2 rounded-full ${taskCompleted ? "bg-blue-500" : taskNeedsAttention ? "bg-amber-500" : running ? "bg-emerald-500" : "bg-slate-400"}`} />
@@ -1517,13 +2001,13 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
                         </span>
                         <span className="text-sm font-semibold">切问学术</span>
                         <span className="rounded-md border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-500">
-                          {agentTiers.find((tier) => tier.id === selectedAgent)?.label}
+                          {caseReplay?.model ?? agentTiers.find((tier) => tier.id === selectedAgent)?.label}
                         </span>
                       </div>
-                      <div className="rounded-[18px] rounded-tl-md bg-slate-50 px-5 py-4 text-[15px] leading-7 text-slate-700">
+                      <div className={`rounded-[18px] rounded-tl-md bg-slate-50 px-5 py-4 text-[15px] leading-7 text-slate-700 ${caseReplay ? "whitespace-pre-line" : ""}`}>
                         {message.text}
                       </div>
-                      {messages.slice(0, index + 1).filter((item) => item.role === "agent").length === 1 && <div className="mt-3">
+                      {!caseReplay && messages.slice(0, index + 1).filter((item) => item.role === "agent").length === 1 && <div className="mt-3">
                         <button
                           type="button"
                           onClick={onOpenProjects}
@@ -1532,7 +2016,7 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
                           <span className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white"><Network className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-3"><strong className="text-sm font-semibold text-slate-900">研究范围已同步到科研画布</strong><ExternalLink className="h-4 w-4 text-violet-400 transition group-hover:translate-x-0.5" /></span><span className="mt-1 block text-xs leading-5 text-slate-500">已补充“证据筛选与评测”分支，并关联向量检索基线。</span></span></span>
                         </button>
                       </div>}
-                      {messages.slice(0, index + 1).filter((item) => item.role === "agent").length === 2 && <div className="mt-3">
+                      {!caseReplay && messages.slice(0, index + 1).filter((item) => item.role === "agent").length === 2 && <div className="mt-3">
                         <button
                           type="button"
                           onClick={() => { setActiveTab("note"); setPanelOpen(true); setCanvasFocusNodeId("n2"); setCanvasFocusRequest((value) => value + 1); }}
@@ -1554,12 +2038,14 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
                   正在制定研究计划并选择工具…
                 </div>
               )}
+              {!isAuthenticated && <AgentLoginPrompt isZh={isZh} onLogin={handleAgentLogin} />}
+              <div ref={replayMessagesEndRef} />
             </div>
           </div>
 
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-white via-white to-transparent px-5 pb-3 pt-14">
             <div className="pointer-events-auto mx-auto max-w-3xl">
-              <AgentComposer
+              {!isAuthenticated ? <AgentLoginComposer isZh={isZh} onLogin={handleAgentLogin} /> : <AgentComposer
                 prompt={prompt}
                 setPrompt={setPrompt}
                 onSubmit={() => submit()}
@@ -1570,7 +2056,8 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
                 onClearSkill={clearSkill}
                 disabled={running}
                 compact
-              />
+                replayModel={caseReplay?.model}
+              />}
               <p className="mt-2 text-center text-[10px] text-slate-300">内容由 AI 生成，请仔细甄别</p>
             </div>
           </div>
@@ -1601,6 +2088,8 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "" }: { onOpenPr
               onTodoStatusChange={handleTodoStatusChange}
               onAddTodo={handleAddTodo}
               onStartBioSkill={handleStartBioSkill}
+              onStartCommonFunction={(label, detail) => submit(`请使用「${label}」功能：${detail}`)}
+              onSelectTab={setActiveTab}
               canvasFocusNodeId={canvasFocusNodeId}
               canvasFocusRequest={canvasFocusRequest}
             />

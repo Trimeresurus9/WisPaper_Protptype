@@ -5,7 +5,7 @@ import type { PartialBlock } from "@blocknote/core";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 import {
-  ArrowLeft, AtSign, BookOpen, Bot, Check, ChevronDown, ChevronRight, Clock3, Edit3,
+  ArrowLeft, AtSign, BookOpen, Bot, Check, ChevronDown, ChevronRight, Clock3, Cpu, Edit3,
   ExternalLink, File, FileText, FlaskConical, FolderTree, GripVertical, Lightbulb, LoaderCircle, Maximize2, MoreHorizontal,
   MessageSquare, PanelRightClose, PanelRightOpen, Plus, Redo2, Save, Search, Send, Sparkles, Table2, Trash2, Undo2, Users, X, ZoomIn, ZoomOut,
 } from "lucide-react";
@@ -20,6 +20,7 @@ type TreeSnapshot = { nodes: TreeNode[]; expanded: string[]; selectedId: string 
 type AgentActivity = { agentName: string; action: "访问中" | "修改中"; updatedAt: number };
 type NodePosition = { x: number; y: number };
 type CanvasSidebarTab = { id: string; type: "note" | "agent"; nodeId: string; title: string };
+type AgentSidebarTool = "common" | "ask" | "plan" | "files" | "search" | "note" | "gpu";
 
 const defaultNodeCategories: Record<string, string> = {
   root: "研究问题", n1: "方法", n2: "实验", n3: "方法", n4: "假设", n5: "实验",
@@ -48,6 +49,16 @@ const projectAgents: ProjectAgent[] = [
   { id: "dataset-research", name: "数据集调研 Agent", description: "核对数据许可、评测脚本与指标定义", status: "运行中", lastUsedAt: 3 },
   { id: "experiment-repro", name: "实验复现 Agent", description: "运行位置偏差对照实验并记录结果", status: "等待中", lastUsedAt: 2 },
   { id: "paper-analysis", name: "论文解析 Agent", description: "整理长上下文评测方法与关键结论", status: "已完成", lastUsedAt: 1 },
+];
+
+const agentSidebarTools: Array<{ id: AgentSidebarTool; label: string; icon: React.ElementType }> = [
+  { id: "common", label: "常用功能", icon: Sparkles },
+  { id: "ask", label: "Ask AI", icon: MessageSquare },
+  { id: "plan", label: "研究计划", icon: Table2 },
+  { id: "files", label: "文件", icon: File },
+  { id: "search", label: "搜索", icon: Search },
+  { id: "note", label: "科研笔记", icon: FileText },
+  { id: "gpu", label: "GPU", icon: Cpu },
 ];
 
 const initialNodes: TreeNode[] = [
@@ -115,6 +126,40 @@ function nodesFromTemplate(projectTitle: string, templateId: string): TreeNode[]
 
 const kindIcon: Record<ResourceKind, React.ElementType> = { "论文": BookOpen, Survey: Search, "Agent 对话": Bot, "文件": File };
 
+const HTML_BLOCK_PATTERN = /<!--\s*wispaper:html-block\s*-->([\s\S]*?)<!--\s*\/wispaper:html-block\s*-->/gi;
+
+function splitHtmlBlocks(note: string) {
+  const htmlBlocks: string[] = [];
+  const markdown = note.replace(HTML_BLOCK_PATTERN, (_match, html: string) => {
+    htmlBlocks.push(html.trim());
+    return "";
+  }).replace(/\n{3,}/g, "\n\n").trim();
+  return { markdown, htmlBlocks };
+}
+
+function mergeHtmlBlocks(markdown: string, htmlBlocks: string[]) {
+  const encoded = htmlBlocks.map((html) => `<!-- wispaper:html-block -->\n${html}\n<!-- /wispaper:html-block -->`).join("\n\n");
+  return [markdown.trim(), encoded].filter(Boolean).join("\n\n");
+}
+
+function sanitizeAgentHtml(html: string) {
+  return html
+    .replace(/<\s*(script|iframe|object|embed|form|meta|link|base)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
+    .replace(/<\s*(script|iframe|object|embed|form|meta|link|base)[^>]*\/?\s*>/gi, "")
+    .replace(/\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/\s+(href|src)\s*=\s*(["'])\s*javascript:[\s\S]*?\2/gi, " $1=\"#\"");
+}
+
+function AgentHtmlBlock({ html, index }: { html: string; index: number }) {
+  return <section className="overflow-hidden rounded-xl border border-violet-200 bg-white shadow-sm">
+    <header className="flex items-center justify-between border-b border-violet-100 bg-violet-50/70 px-3 py-2">
+      <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-violet-700"><Bot className="h-3.5 w-3.5" />Agent · HTML Block</span>
+      <span className="text-[10px] text-violet-400">#{index + 1}</span>
+    </header>
+    <div className="agent-html-block overflow-x-auto p-4 text-sm leading-6 text-slate-700" dangerouslySetInnerHTML={{ __html: sanitizeAgentHtml(html) }} />
+  </section>;
+}
+
 function markdownToBlocks(markdown: string): PartialBlock[] {
   if (!markdown.trim()) return [{ type: "paragraph", content: "" }];
   const parts = markdown.split(/\n\n+/);
@@ -139,7 +184,8 @@ function BlockNoteEditor({ initialMarkdown, availableResources, onChange, onAtta
   remoteEditor?: { type: "agent" | "collaborator"; name: string } | null;
   compact?: boolean;
 }) {
-  const editor = useCreateBlockNote({ initialContent: markdownToBlocks(initialMarkdown) });
+  const initialNoteParts = useMemo(() => splitHtmlBlocks(initialMarkdown), [initialMarkdown]);
+  const editor = useCreateBlockNote({ initialContent: markdownToBlocks(initialNoteParts.markdown) });
   const [attachedAgentIds, setAttachedAgentIds] = useState<string[]>(() => projectAgents
     .filter((agent) => initialMarkdown.includes(`#agent-${agent.id}`))
     .map((agent) => agent.id));
@@ -237,14 +283,15 @@ function BlockNoteEditor({ initialMarkdown, availableResources, onChange, onAtta
     <BlockNoteView
       editor={editor}
       theme="light"
-      onChange={async () => onChange(await editor.blocksToMarkdownLossy(editor.document))}
+      onChange={async () => onChange(mergeHtmlBlocks(await editor.blocksToMarkdownLossy(editor.document), initialNoteParts.htmlBlocks))}
     />
+    {!!initialNoteParts.htmlBlocks.length && <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">{initialNoteParts.htmlBlocks.map((html, index) => <AgentHtmlBlock key={`${index}-${html.slice(0, 24)}`} html={html} index={index} />)}</div>}
     {mentionMenu && <div className="fixed z-[10050] max-h-[min(420px,70vh)] w-80 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl" style={mentionMenu} onMouseDown={(event) => event.preventDefault()}>
       <div className="flex items-center justify-between px-2 py-1.5"><span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">论文与项目资源</span><button type="button" onClick={() => setMentionMenu(null)} className="rounded p-1 text-slate-400 hover:bg-slate-100"><X className="h-3.5 w-3.5" /></button></div>
       <p className="mt-1 border-t border-slate-100 px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">工作空间资源</p>
       {availableResources.map((resource) => { const Icon = kindIcon[resource.kind]; return <button key={resource.id} type="button" onClick={() => chooseMention(() => attachResource(resource))} className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-blue-50"><Icon className="h-4 w-4 shrink-0 text-blue-600" /><span className="min-w-0 flex-1 truncate text-sm text-slate-700">{resource.title}</span><span className="text-[10px] text-slate-400">{resource.kind}</span></button>; })}
     </div>}
-    <p className="pointer-events-none absolute bottom-0 left-2 text-[10px] font-normal tracking-wide text-slate-300/70">输入 “/” 插入 Block，输入 “@” 提及论文或项目资源</p>
+    <p className="pointer-events-none absolute bottom-0 left-2 text-[10px] font-normal tracking-wide text-slate-300/70">输入 “/” 插入 Block，输入 “@” 提及资源 · 支持 Agent 写入 HTML Block</p>
   </div>;
 }
 
@@ -339,13 +386,19 @@ export function ResearchTree({
   const redoStack = useRef<TreeSnapshot[]>([]);
   const [, setHistoryVersion] = useState(0);
   const [fullScreen, setFullScreen] = useState(false);
+  const [noteDrawerOpen, setNoteDrawerOpen] = useState(false);
+  const [noteDrawerExpanded, setNoteDrawerExpanded] = useState(false);
   const [mockAgentEditing, setMockAgentEditing] = useState(false);
   const [mockCollaboratorEditing, setMockCollaboratorEditing] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarTabs, setSidebarTabs] = useState<CanvasSidebarTab[]>([]);
-  const [activeSidebarTab, setActiveSidebarTab] = useState("message-board");
+  const [activeSidebarTab, setActiveSidebarTab] = useState("canvas-agent");
   const [canvasAgentInput, setCanvasAgentInput] = useState("");
-  const [canvasAgentMessages, setCanvasAgentMessages] = useState([
+  const [canvasAgentMessages, setCanvasAgentMessages] = useState(() => initialTemplate === "blank" ? [
+    { role: "agent", text: `欢迎创建“${projectTitle}”。这是一个空白项目，我可以先帮你搭建可扩展的基本结构。` },
+    { role: "agent", text: "建议先定义核心研究问题，再拆分研究方向，随后补充文献、数据集、实验设计和结果节点。" },
+    { role: "agent", text: "你可以让我直接创建基本结构，也可以从模板开始。" },
+  ] : [
     { role: "agent", text: "我会从研究问题出发，创建候选研究方向，并为每个方向启动独立 Agent 调研。" },
     { role: "agent", text: "调研完成后，我会提炼值得研究的 Idea，继续寻找数据集、设计实验并记录结果。" },
   ]);
@@ -360,7 +413,13 @@ export function ResearchTree({
   const [messageDraft, setMessageDraft] = useState("");
   const [boardMentionOpen, setBoardMentionOpen] = useState(false);
   const [agentLaunchDecision, setAgentLaunchDecision] = useState<"pending" | "running" | "cancelled">("pending");
-  const [agentDialog, setAgentDialog] = useState<{ name: string; nodeTitle: string } | null>(null);
+  const [activeAgent, setActiveAgent] = useState<{ id: string; name: string; nodeTitle: string }>({ id: "project-assistant", name: "项目助手", nodeTitle: projectTitle });
+  const [agentPanelMessages, setAgentPanelMessages] = useState([
+    { role: "agent", text: "我已读取项目画布与当前节点。可以继续分析、更新节点或创建后续任务。" },
+  ]);
+  const [agentPanelInput, setAgentPanelInput] = useState("");
+  const [activeAgentTool, setActiveAgentTool] = useState<AgentSidebarTool>("common");
+  const [agentUnreadCounts, setAgentUnreadCounts] = useState<Record<string, number>>({ "dataset-research": 3, "experiment-repro": 1, "paper-analysis": 2 });
   const [fullScreenAttachment, setFullScreenAttachment] = useState<Resource | null>(null);
   const [boardMessages, setBoardMessages] = useState([
     { author: "博一新生林沐", role: "user", text: "我已整理 Lost in the Middle、RULER 和 NeedleBench，下一步想先确认数据许可。" },
@@ -369,14 +428,6 @@ export function ResearchTree({
     { author: "导师陈教授", role: "user", text: "重点记录许可、评测指标和算力预算，结论需要保留失败分支。" },
   ]);
 
-  useEffect(() => {
-    const handleEmbeddedAgentNavigation = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin || event.data?.type !== "wispaper:close-agent-dialog") return;
-      setAgentDialog(null);
-    };
-    window.addEventListener("message", handleEmbeddedAgentNavigation);
-    return () => window.removeEventListener("message", handleEmbeddedAgentNavigation);
-  }, []);
   const [mapScale, setMapScale] = useState(0.9);
   const [mapOffset, setMapOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
@@ -395,6 +446,15 @@ export function ResearchTree({
   const [agentActivities, setAgentActivities] = useState<Record<string, AgentActivity>>(() => {
     try { return JSON.parse(window.localStorage.getItem("wispaper-canvas-agent-activity") || "{}"); } catch { return {}; }
   });
+  const [nodeAgentHistory, setNodeAgentHistory] = useState<Record<string, string[]>>({
+    root: ["项目助手", "文献调研 Agent"],
+    n1: ["论文解析 Agent"],
+    n2: ["数据集调研 Agent", "项目助手"],
+    n3: ["实验设计 Agent"],
+    n4: ["数据集调研 Agent"],
+    n5: ["数据集调研 Agent", "实验复现 Agent"],
+    n6: ["实验复现 Agent", "结果分析 Agent"],
+  });
 
   useEffect(() => {
     if (previousNodeCount.current === nodes.length) return;
@@ -407,16 +467,45 @@ export function ResearchTree({
   }, [nodes.length]);
 
   const openNodeNoteTab = (node: TreeNode) => {
-    const tab: CanvasSidebarTab = { id: `note-${node.id}`, type: "note", nodeId: node.id, title: node.title };
-    setSidebarTabs((tabs) => [...tabs.filter((item) => item.type !== "note"), tab]);
     setSelectedIds(new Set([node.id]));
     setSelectedId(node.id);
-    setActiveSidebarTab(tab.id);
-    setMessageBoardCollapsed(false);
+    setNoteDrawerOpen(true);
   };
 
   const openNodeAgentTab = (node: TreeNode, agentName = "实验复现 Agent") => {
-    setAgentDialog({ name: agentName, nodeTitle: node.title });
+    const agent = projectAgents.find((item) => item.name === agentName);
+    setSelectedId(node.id);
+    setSelectedIds(new Set([node.id]));
+    setActiveAgent({ id: agent?.id ?? `node-agent-${Date.now()}`, name: agentName, nodeTitle: node.title });
+    setNodeAgentHistory((items) => ({ ...items, [node.id]: Array.from(new Set([...(items[node.id] ?? []), agentName])) }));
+    setAgentPanelMessages([{ role: "agent", text: `已打开“${node.title}”的完整 Agent 对话。我会直接在右侧栏中继续执行并更新画布。` }]);
+    setActiveAgentTool("common");
+    setActiveSidebarTab("agent-conversation");
+    setMessageBoardCollapsed(false);
+  };
+
+  const createNodeAgent = (node: TreeNode) => {
+    const name = `节点调研 Agent ${((nodeAgentHistory[node.id]?.length ?? 0) + 1)}`;
+    openNodeAgentTab(node, name);
+    showToast(`已为“${node.title}”新建 Agent`);
+  };
+
+  const switchSidebarAgent = (agentId: string) => {
+    const agent = projectAgents.find((item) => item.id === agentId);
+    if (!agent) return;
+    setActiveAgent({ id: agent.id, name: agent.name, nodeTitle: agent.id === "project-assistant" ? projectTitle : (selected?.title ?? projectTitle) });
+    setActiveAgentTool("common");
+    setAgentPanelMessages([{ role: "agent", text: agent.id === "project-assistant" ? "我已读取当前项目画布，可以继续统筹研究流程。" : `已切换到 ${agent.name}，我会结合当前节点与项目上下文继续执行。` }]);
+    setActiveSidebarTab(agent.id === "project-assistant" ? "canvas-agent" : "agent-conversation");
+    setAgentUnreadCounts((items) => ({ ...items, [agent.id]: 0 }));
+    setMessageBoardCollapsed(false);
+  };
+
+  const sendAgentPanelMessage = () => {
+    const value = agentPanelInput.trim();
+    if (!value) return;
+    setAgentPanelMessages((items) => [...items, { role: "user", text: value }, { role: "agent", text: "已收到。我会结合当前节点和项目上下文继续执行，并将修改记录保留在该节点。" }]);
+    setAgentPanelInput("");
   };
 
   const openAttachmentPreview = (resource: Resource) => {
@@ -449,6 +538,9 @@ export function ResearchTree({
       { id: "workflow-dataset", title: "数据集：LoCoMo + LongMemEval", category: "数据集", tags: ["已确认"], updatedAt: Date.now(), parentId: "workflow-idea", note: "# 数据集\n\n使用 LoCoMo 与 LongMemEval 验证跨会话记忆能力。", resources: [] },
       { id: "workflow-experiment", title: "实验：动态路由与固定检索对照", category: "实验", tags: ["结果已记录"], updatedAt: Date.now(), parentId: "workflow-dataset", note: "# 实验记录\n\n动态路由方案在记忆问答与约束遵循上优于固定检索基线。", resources: [] },
     ];
+    additions.forEach((node, index) => {
+      node.note += `\n\n<!-- wispaper:html-block -->\n<div style="border-radius:10px;background:#f5f3ff;padding:14px 16px;border:1px solid #ddd6fe"><span style="color:#7c3aed;font-size:11px;font-weight:600">Agent 研究摘要</span><strong style="display:block;margin-top:5px;color:#0f172a">${node.title}</strong><div style="display:flex;gap:8px;margin-top:10px"><span style="border-radius:999px;background:#fff;padding:4px 8px;color:#64748b;font-size:11px">${node.category}</span><span style="border-radius:999px;background:#ede9fe;padding:4px 8px;color:#6d28d9;font-size:11px">阶段 ${index + 1}</span></div></div>\n<!-- /wispaper:html-block -->`;
+    });
     const positions: Record<string, NodePosition> = {
       "direction-vector": { x: 430, y: 40 }, "direction-graph": { x: 430, y: 220 }, "direction-summary": { x: 430, y: 400 },
       "workflow-idea": { x: 760, y: 40 }, "workflow-dataset": { x: 1090, y: 40 }, "workflow-experiment": { x: 1420, y: 40 },
@@ -502,12 +594,20 @@ export function ResearchTree({
         { id: "usecase-experiment-3", title: "运行实验 3：层级摘要对照", category: "实验", tags: ["无显著提升"], updatedAt: now, parentId: "usecase-dataset-3", note: "# 实验运行\n\n主要指标未达到预设提升阈值。", resources: [] },
       ],
       [
-        { id: "usecase-result-1", title: "结果分析 1：动态路由显著提升", category: "结果分析", tags: ["正向结果"], updatedAt: now, parentId: "usecase-experiment-1", note: "# 结果分析\n\n动态路由在记忆问答和约束遵循上取得显著提升。\n\n完整指标、各随机种子结果与消融明细见 [文件 · experiment-results.xlsx](#resource-experiment-results-xlsx)。", resources: [{ id: "experiment-results-xlsx", kind: "文件", title: "experiment-results.xlsx" }] },
+        { id: "usecase-result-1", title: "结果分析 1：动态路由显著提升", category: "结果分析", tags: ["正向结果"], updatedAt: now, parentId: "usecase-experiment-1", note: "# 结果分析\n\n动态路由在记忆问答和约束遵循上取得显著提升。\n\n完整指标、各随机种子结果与消融明细见 [文件 · experiment-results.xlsx](#resource-experiment-results-xlsx)。\n\n<!-- wispaper:html-block -->\n<div style=\"display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px\"><div style=\"padding:12px;border-radius:10px;background:#ecfdf5\"><strong style=\"display:block;color:#047857;font-size:20px\">+8.7%</strong><span style=\"color:#64748b;font-size:12px\">记忆问答</span></div><div style=\"padding:12px;border-radius:10px;background:#eff6ff\"><strong style=\"display:block;color:#1d4ed8;font-size:20px\">+5.2%</strong><span style=\"color:#64748b;font-size:12px\">约束遵循</span></div><div style=\"padding:12px;border-radius:10px;background:#fff7ed\"><strong style=\"display:block;color:#c2410c;font-size:20px\">-18%</strong><span style=\"color:#64748b;font-size:12px\">检索开销</span></div></div>\n<!-- /wispaper:html-block -->", resources: [{ id: "experiment-results-xlsx", kind: "文件", title: "experiment-results.xlsx" }] },
         { id: "usecase-result-2-failure", title: "失败分析：全量图方案资源不可行", category: "失败记录", tags: ["保留结论"], updatedAt: now, parentId: "usecase-experiment-2-failed", note: "# 失败分析\n\n全量图方案资源开销不可接受，转向稀疏构图。", resources: [] },
         { id: "usecase-result-2", title: "结果分析 2：稀疏构图可行但收益有限", category: "结果分析", tags: ["继续观察"], updatedAt: now, parentId: "usecase-experiment-2", note: "# 结果分析\n\n重试成功，但收益不足以覆盖额外复杂度。", resources: [] },
         { id: "usecase-result-3", title: "失败 Case：层级摘要未优于平面摘要", category: "失败记录", tags: ["假设未成立"], updatedAt: now, parentId: "usecase-experiment-3", note: "# 失败 Case\n\n层级摘要没有显著优于平面摘要，记录反例并停止扩展。", resources: [] },
       ],
     ];
+    stages.flat().forEach((node, nodeIndex) => {
+      if (node.note.includes("wispaper:html-block")) return;
+      const isFailure = node.category === "失败记录";
+      const accent = isFailure ? "#dc2626" : node.category === "结果分析" ? "#059669" : "#7c3aed";
+      const surface = isFailure ? "#fef2f2" : node.category === "结果分析" ? "#ecfdf5" : "#f5f3ff";
+      const status = node.tags?.[0] ?? "Agent 已更新";
+      node.note = `${node.note}\n\n<!-- wispaper:html-block -->\n<div style="border-left:4px solid ${accent};border-radius:10px;background:${surface};padding:14px 16px"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><div><span style="display:block;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.08em">${node.category ?? "研究节点"} · Agent 产出</span><strong style="display:block;margin-top:4px;color:#0f172a;font-size:15px">${node.title}</strong></div><span style="flex:none;border-radius:999px;background:#fff;padding:4px 9px;color:${accent};font-size:11px;font-weight:600">${status}</span></div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px"><div style="border-radius:8px;background:rgba(255,255,255,.75);padding:9px"><span style="display:block;color:#94a3b8;font-size:10px">流程阶段</span><b style="color:#334155;font-size:13px">${nodeIndex + 1} / ${stages.flat().length}</b></div><div style="border-radius:8px;background:rgba(255,255,255,.75);padding:9px"><span style="display:block;color:#94a3b8;font-size:10px">写入方式</span><b style="color:#334155;font-size:13px">HTML Block</b></div></div></div>\n<!-- /wispaper:html-block -->`;
+    });
     const positions: Record<string, NodePosition> = { "usecase-question": { x: 40, y: 250 }, "usecase-literature": { x: 340, y: 250 } };
     [1, 2, 3].forEach((index) => {
       const y = [40, 250, 560][index - 1];
@@ -538,6 +638,8 @@ export function ResearchTree({
     setExpanded(new Set());
     setNodePositions({});
     setCanvasAgentMessages([{ role: "agent", text: "完整研究用例已启动。我会按阶段更新画布。" }]);
+    setActiveAgent({ id: "project-assistant", name: "项目助手", nodeTitle: projectTitle });
+    setActiveAgentTool("common");
     setActiveSidebarTab("canvas-agent");
     setSidebarCollapsed(false);
     showToast(`完整研究用例已启动，每步间隔 ${delayMs / 1000} 秒`);
@@ -548,13 +650,19 @@ export function ResearchTree({
         setNodePositions((current) => ({ ...current, ...Object.fromEntries(stage.map((node) => [node.id, positions[node.id]])) }));
         setCanvasAgentMessages((items) => [...items, { role: "agent", text: messages[index] }]);
       }, delayMs + stageInterval * index);
-      const noteTimer = window.setTimeout(() => openNodeNoteTab(focusNodes[index]), delayMs * 1.4 + stageInterval * index);
-      const agentTimer = window.setTimeout(() => {
-        if (index === 0) { setActiveSidebarTab("canvas-agent"); setSidebarCollapsed(false); }
-        else openNodeAgentTab(focusNodes[index], agentNames[index]);
+      const focusTimer = window.setTimeout(() => {
+        const focusNode = focusNodes[index];
+        setSelectedIds(new Set([focusNode.id]));
+        setSelectedId(focusNode.id);
+        setNoteDrawerOpen(true);
+        setNoteDrawerExpanded(false);
+        setNodeAgentHistory((items) => ({ ...items, [focusNode.id]: Array.from(new Set([...(items[focusNode.id] ?? []), agentNames[index]])) }));
+        setActiveAgent({ id: "project-assistant", name: "项目助手", nodeTitle: projectTitle });
+        setActiveSidebarTab("canvas-agent");
+        setSidebarCollapsed(false);
         if (index === stages.length - 1) showToast("多 Agent 完整研究用例已完成");
-      }, delayMs * 2.1 + stageInterval * index);
-      workflowTimers.current.push(stageTimer, noteTimer, agentTimer);
+      }, delayMs * 1.7 + stageInterval * index);
+      workflowTimers.current.push(stageTimer, focusTimer);
     });
   };
 
@@ -596,7 +704,17 @@ export function ResearchTree({
   }, [focusNodeId, focusRequest, nodes]);
   useEffect(() => {
     const syncAgentActivities = () => {
-      try { setAgentActivities(JSON.parse(window.localStorage.getItem("wispaper-canvas-agent-activity") || "{}")); } catch { setAgentActivities({}); }
+      try {
+        const activities = JSON.parse(window.localStorage.getItem("wispaper-canvas-agent-activity") || "{}") as Record<string, AgentActivity>;
+        setAgentActivities(activities);
+        setNodeAgentHistory((items) => {
+          const next = { ...items };
+          Object.entries(activities).forEach(([nodeId, activity]) => {
+            if (activity.action === "修改中") next[nodeId] = Array.from(new Set([...(next[nodeId] ?? []), activity.agentName]));
+          });
+          return next;
+        });
+      } catch { setAgentActivities({}); }
     };
     window.addEventListener("wispaper-canvas-agent-activity", syncAgentActivities);
     window.addEventListener("storage", syncAgentActivities);
@@ -927,7 +1045,13 @@ export function ResearchTree({
         <span className={`inline-flex w-fit max-w-full items-center gap-1.5 truncate rounded-full px-2 py-1 text-[10px] font-semibold ${categoryClass(nodeCategory(node), node.categoryColor)}`}><CategoryIcon className="h-3 w-3 shrink-0" />{nodeCategory(node)}</span>
         <span className="mt-2 line-clamp-2 text-[15px] font-semibold leading-5">{node.title}</span>
         <span className="mt-2 flex min-w-0 gap-1">{nodeTags(node).slice(0, 2).map((tag) => <span key={tag} className="max-w-24 truncate rounded bg-slate-100 px-1.5 py-0.5 text-[9px] text-slate-500">#{tag}</span>)}</span>
-        <span className="mt-auto flex items-center justify-between gap-2 border-t border-current/10 pt-2 text-[9px] opacity-70"><span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" />{updatedLabel(node)}</span>{workflowAgentNodeIds.has(node.id) && <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); openNodeAgentTab(node, node.id === demoAgentNodeId ? "实验复现 Agent" : "方向调研 Agent"); }} className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 font-medium text-blue-700 hover:bg-blue-100" aria-label={`打开 ${node.id === demoAgentNodeId ? "GPU 实验" : "方向调研"} Agent 对话`}><LoaderCircle className="h-3 w-3 animate-spin" /><span>{node.id === demoAgentNodeId ? "实验复现" : "调研中"}</span></button>}</span>
+        <span className="mt-auto flex items-center justify-between gap-2 border-t border-current/10 pt-2 text-[9px]">
+          <span className="inline-flex items-center gap-1 opacity-60"><Clock3 className="h-3 w-3" />{updatedLabel(node)}</span>
+          <span className="flex items-center -space-x-1.5">
+            {(nodeAgentHistory[node.id] ?? []).map((agentName, index) => <button key={agentName} type="button" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }} onPointerUp={(event) => event.stopPropagation()} onClick={(event) => { event.preventDefault(); event.stopPropagation(); openNodeAgentTab(node, agentName); }} title={`${agentName} · 点击在右侧打开对话`} aria-label={`在右侧打开 ${agentName} 对话`} className={`grid h-6 w-6 place-items-center rounded-full border-2 border-white text-[8px] font-semibold text-white shadow-sm transition hover:z-10 hover:scale-110 ${index % 3 === 0 ? "bg-violet-600" : index % 3 === 1 ? "bg-blue-600" : "bg-emerald-600"}`}>{agentName.replace(" Agent", "").slice(0, 1)}</button>)}
+            <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); createNodeAgent(node); }} title="在此节点新建 Agent" aria-label={`为${node.title}新建 Agent`} className="grid h-6 w-6 place-items-center rounded-full border border-dashed border-violet-300 bg-white text-violet-600 shadow-sm hover:bg-violet-50"><Plus className="h-3 w-3" /></button>
+          </span>
+        </span>
       </div>
       <button onPointerDown={(event) => event.stopPropagation()} onClick={() => addNode(node, false)} className="absolute -right-4 top-1/2 z-20 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-blue-600 text-white opacity-0 shadow-lg transition-opacity hover:bg-blue-700 group-hover:opacity-100" title="添加子节点"><Plus className="h-4 w-4" /></button>
       {nodeChildren.length > 0 && <button onPointerDown={(event) => event.stopPropagation()} onClick={() => setExpanded((items) => { const next = new Set(items); next.has(node.id) ? next.delete(node.id) : next.add(node.id); return next; })} className="absolute -left-3 top-1/2 z-10 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full border border-slate-200 bg-white text-slate-500 opacity-0 shadow-sm group-hover:opacity-100" title={isOpen ? "折叠分支" : "展开分支"}>{isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}</button>}
@@ -971,9 +1095,11 @@ export function ResearchTree({
   const NoteContent = () => {
     if (!selected) return null;
     const linkedResources = selected.resources.filter((resource) => selected.note.includes(`#resource-${resource.id}`));
+    const noteParts = splitHtmlBlocks(selected.note);
     return <div className="space-y-5">
     <NoteIdentity />
-    {selected.note ? selected.note.split("\n\n").map((block, index) => block.startsWith("# ") ? null : block.startsWith("## ") ? <h2 key={index} className="text-lg font-semibold">{block.slice(3)}</h2> : <p key={index} className="whitespace-pre-line text-sm leading-7 text-slate-600">{block.replace(/\*\*/g, "").split(/(\[[^\]]+\]\(#resource-[^)]+\))/g).map((part, partIndex) => { const match = part.match(/^\[([^\]]+)\]\(#resource-[^)]+\)$/); return match ? <span key={partIndex} className="mx-0.5 inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">{match[1]}</span> : part; })}</p>) : <div className="py-24 text-center"><FileText className="mx-auto h-9 w-9 text-slate-300" /><p className="mt-4 font-medium">开始记录本次科研探索</p><button onClick={openEditor} className="mt-3 text-sm font-medium text-blue-600">开始编辑</button></div>}
+    {noteParts.markdown ? noteParts.markdown.split("\n\n").map((block, index) => block.startsWith("# ") ? null : block.startsWith("## ") ? <h2 key={index} className="text-lg font-semibold">{block.slice(3)}</h2> : <p key={index} className="whitespace-pre-line text-sm leading-7 text-slate-600">{block.replace(/\*\*/g, "").split(/(\[[^\]]+\]\(#resource-[^)]+\))/g).map((part, partIndex) => { const match = part.match(/^\[([^\]]+)\]\(#resource-[^)]+\)$/); return match ? <span key={partIndex} className="mx-0.5 inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">{match[1]}</span> : part; })}</p>) : !noteParts.htmlBlocks.length && <div className="py-24 text-center"><FileText className="mx-auto h-9 w-9 text-slate-300" /><p className="mt-4 font-medium">开始记录本次科研探索</p><button onClick={openEditor} className="mt-3 text-sm font-medium text-blue-600">开始编辑</button></div>}
+    {!!noteParts.htmlBlocks.length && <div className="space-y-3">{noteParts.htmlBlocks.map((html, index) => <AgentHtmlBlock key={`${index}-${html.slice(0, 24)}`} html={html} index={index} />)}</div>}
     {!!linkedResources.length && <div className="border-t border-slate-100 pt-5"><p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">关联资源</p><div className="flex flex-wrap gap-2">{linkedResources.map((resource) => { const Icon = kindIcon[resource.kind]; return <button key={resource.id} onClick={() => showToast(`已在新页面打开：${resource.title}`)} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm hover:border-blue-300 hover:text-blue-700"><Icon className="h-4 w-4" /><span className="max-w-72 truncate">{resource.title}</span><ExternalLink className="h-3.5 w-3.5 text-slate-400" /></button>; })}</div></div>}
   </div>;
   };
@@ -995,16 +1121,43 @@ export function ResearchTree({
     showToast("已从模板创建科研画布");
   };
 
-  if (!nodes.length) return <div className="relative flex h-full min-h-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-[radial-gradient(#dbe3ef_1px,transparent_1px)] bg-[size:20px_20px] shadow-sm">
-    <div className="max-w-lg rounded-3xl border border-dashed border-slate-300 bg-white/95 px-12 py-14 text-center shadow-sm backdrop-blur">
+  const createGuidedProjectStructure = () => {
+    const now = Date.now();
+    const guidedNodes: TreeNode[] = [
+      { id: `root-${projectId}`, title: projectTitle, category: "研究主题", tags: ["项目起点"], updatedAt: now, parentId: null, root: true, note: `# ${projectTitle}\n\n项目助手已创建基本研究结构，请从核心研究问题开始补充。`, resources: [] },
+      { id: `question-${projectId}`, title: "定义核心研究问题", category: "研究问题", tags: ["待完善"], updatedAt: now, parentId: `root-${projectId}`, note: "# 核心研究问题\n\n记录研究对象、关键变量、边界和可验证的目标。", resources: [] },
+      { id: `direction-${projectId}`, title: "拆分候选研究方向", category: "研究方向", tags: ["待调研"], updatedAt: now, parentId: `question-${projectId}`, note: "# 候选研究方向\n\n基于文献与研究空白创建多个可并行调研的分支。", resources: [] },
+      { id: `evidence-${projectId}`, title: "收集文献、数据与证据", category: "证据", tags: ["待收集"], updatedAt: now, parentId: `direction-${projectId}`, note: "# 证据与数据\n\n关联文献、数据集、评测基准和关键证据。", resources: [] },
+      { id: `experiment-${projectId}`, title: "设计实验并记录结果", category: "实验设计", tags: ["待设计"], updatedAt: now, parentId: `direction-${projectId}`, note: "# 实验与结果\n\n定义基线、变量、指标、资源预算与结果记录方式。", resources: [] },
+    ];
+    const expandedIds = new Set(guidedNodes.map((node) => node.id));
+    setNodes(guidedNodes);
+    setExpanded(expandedIds);
+    setNodePositions(calculateTreeLayout(guidedNodes, expandedIds));
+    setCanvasAgentMessages((items) => [...items, { role: "agent", text: "基本结构已创建。接下来请先完善核心研究问题，我会据此建议候选方向和后续 Agent 任务。" }]);
+    showToast("项目助手已创建项目基本结构");
+  };
+
+  if (!nodes.length) return <div className="relative flex h-full min-h-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <main className="flex min-w-0 flex-1 items-center justify-center bg-[radial-gradient(#dbe3ef_1px,transparent_1px)] bg-[size:20px_20px] p-8">
+    <div className="max-w-lg rounded-3xl border border-dashed border-slate-300 bg-white/95 px-12 py-12 text-center shadow-sm backdrop-blur">
       <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600"><FolderTree className="h-7 w-7" /></span>
       <h2 className="mt-5 text-xl font-semibold">空白科研画布</h2>
-      <p className="mt-2 text-sm leading-6 text-slate-500">从第一个研究节点开始，或使用模板快速搭建实验流程。</p>
+      <p className="mt-2 text-sm leading-6 text-slate-500">项目助手已准备好引导。可以先创建一套可继续拆分的研究基本结构。</p>
       <div className="mt-6 flex justify-center gap-3">
-        <button onClick={() => { const rootNode: TreeNode = { id: `root-${projectId}`, title: projectTitle, category: "研究主题", tags: ["新建"], updatedAt: Date.now(), parentId: null, root: true, note: "", resources: [] }; setNodes([rootNode]); setExpanded(new Set([rootNode.id])); setNodePositions({ [rootNode.id]: { x: 100, y: 160 } }); }} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium hover:bg-slate-50">新建空白节点</button>
-        <button onClick={() => setShowTemplatePicker(true)} className="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800">从模板创建</button>
+        <button onClick={createGuidedProjectStructure} className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-700">由项目助手构建</button>
+        <button onClick={() => setShowTemplatePicker(true)} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium hover:bg-slate-50">选择模板</button>
       </div>
     </div>
+    </main>
+    <aside className="flex w-[520px] shrink-0 border-l border-slate-200 bg-white" aria-label="项目助手首次引导">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3"><span className="relative grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white"><Bot className="h-4 w-4" /><span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" /></span><div className="min-w-0 flex-1"><p className="text-[10px] font-medium text-violet-600">项目首次引导</p><h2 className="text-sm font-semibold">项目助手</h2></div></header>
+        <div className="min-h-0 flex-1 space-y-3 overflow-auto bg-slate-50/70 p-3">{canvasAgentMessages.map((message, index) => <div key={index} className="max-w-[94%] rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs leading-5 text-slate-600">{message.text}</div>)}<div className="rounded-xl border border-violet-200 bg-violet-50/70 p-3"><p className="text-xs font-semibold text-violet-900">建议的基本结构</p><div className="mt-3 space-y-2">{["核心研究问题", "候选研究方向", "文献、数据与证据", "实验设计与结果"].map((item, index) => <div key={item} className="flex items-center gap-2 text-[11px] text-violet-800"><span className="grid h-5 w-5 place-items-center rounded-full bg-white font-semibold">{index + 1}</span>{item}</div>)}</div></div></div>
+        <footer className="border-t border-slate-200 p-3"><button onClick={createGuidedProjectStructure} className="w-full rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-violet-700">创建项目基本结构</button><button onClick={() => setShowTemplatePicker(true)} className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50">或者从模板开始</button></footer>
+      </div>
+      <nav className="flex w-[64px] shrink-0 flex-col items-center gap-2 border-l border-slate-200 bg-white py-3"><span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Agent</span>{agentSidebarTools.map((tool) => { const Icon = tool.icon; return <button key={tool.id} className={`rounded-xl p-3 ${tool.id === "common" ? "bg-violet-600 text-white" : "text-slate-400"}`} title={tool.label}><Icon className="h-4 w-4" /></button>; })}</nav>
+    </aside>
     {showTemplatePicker && <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-6" onMouseDown={() => setShowTemplatePicker(false)}><div className="w-full max-w-3xl rounded-3xl bg-white p-6 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
       <div className="flex items-start justify-between"><div><h3 className="text-xl font-semibold">选择科研画布模板</h3><p className="mt-1 text-sm text-slate-500">模板会生成可编辑、可拖拽的初始节点。</p></div><button onClick={() => setShowTemplatePicker(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button></div>
       <div className="mt-6 grid grid-cols-2 gap-4">{canvasTemplateBlueprints.map((template, index) => <button key={template.id} onClick={() => applyCanvasTemplate(template.id)} className="group rounded-2xl border border-slate-200 p-5 text-left hover:border-blue-400 hover:shadow-md"><span className={`grid h-10 w-10 place-items-center rounded-xl ${index === 0 ? "bg-violet-100 text-violet-700" : index === 1 ? "bg-rose-100 text-rose-700" : index === 2 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}><FlaskConical className="h-5 w-5" /></span><h4 className="mt-5 font-semibold group-hover:text-blue-700">{template.title}</h4><p className="mt-2 text-sm leading-6 text-slate-500">{template.description}</p><p className="mt-4 text-xs text-slate-400">{template.nodes.length} 个初始节点</p></button>)}</div>
@@ -1023,7 +1176,7 @@ export function ResearchTree({
   </div>;
 
   return <div className="flex h-full min-h-0 rounded-2xl border border-slate-200 bg-white shadow-sm">
-    <section className={`relative flex min-w-0 flex-col overflow-hidden bg-[#f8fafc] transition-[flex] duration-300 ${selected ? "flex-[1.7] border-r border-slate-200" : "flex-1"}`}>
+    <section className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[#f8fafc]">
       <div
         onDragOver={(event) => {
           if (!draggedNodeId) return;
@@ -1140,12 +1293,40 @@ export function ResearchTree({
         </div>
         <div className="pointer-events-none absolute bottom-3 left-4 text-[11px] font-normal tracking-wide text-slate-300/80">拖动空白区域平移 · 滚轮缩放 · ⌘ 点击/拖动框选 · 多选后拖动同步移动</div>
       </div>
+      {noteDrawerOpen && selected && <section className={`absolute inset-x-0 bottom-0 z-[70] flex flex-col overflow-hidden rounded-t-2xl border-x border-t border-slate-200 bg-white shadow-[0_-16px_40px_rgba(15,23,42,0.16)] transition-[height] duration-300 ${noteDrawerExpanded ? "h-full" : "h-1/2"}`} aria-label="节点笔记抽屉">
+        <div className="flex h-1.5 shrink-0 justify-center bg-slate-50"><span className="mt-0.5 h-1 w-12 rounded-full bg-slate-300" /></div>
+        <header className="flex shrink-0 items-center gap-3 border-b border-slate-200 px-4 py-2.5">
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-blue-600 text-white"><FileText className="h-4 w-4" /></span>
+          <div className="min-w-0 flex-1"><p className="text-[10px] font-medium text-blue-600">节点笔记 · 自动保存</p><h2 className="truncate text-sm font-semibold">{selected.title}</h2></div>
+          <div className="flex items-center -space-x-1.5">{(nodeAgentHistory[selected.id] ?? []).map((agentName, index) => <button key={agentName} type="button" onClick={() => openNodeAgentTab(selected, agentName)} title={`${agentName} · 在右侧打开对话`} className={`grid h-7 w-7 place-items-center rounded-full border-2 border-white text-[9px] font-semibold text-white shadow-sm hover:z-10 ${index % 3 === 0 ? "bg-violet-600" : index % 3 === 1 ? "bg-blue-600" : "bg-emerald-600"}`}>{agentName.replace(" Agent", "").slice(0, 1)}</button>)}</div>
+          <button type="button" onClick={() => createNodeAgent(selected)} className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700"><Plus className="h-3.5 w-3.5" />启动 Agent</button>
+          <span className="mx-1 h-6 border-l border-slate-200" />
+          <button type="button" onClick={() => setNoteDrawerExpanded((value) => !value)} className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50" aria-label={noteDrawerExpanded ? "恢复半屏笔记" : "展开笔记到整个中央工作区"} title={noteDrawerExpanded ? "恢复半屏" : "展开中央工作区"}>{noteDrawerExpanded ? <ChevronDown className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}</button>
+          <button type="button" onClick={() => { setNoteDrawerOpen(false); setNoteDrawerExpanded(false); }} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100" aria-label="关闭节点笔记"><X className="h-4 w-4" /></button>
+        </header>
+        <div className="min-h-0 flex-1 overflow-auto bg-[#fafbfc] p-3"><article className="mx-auto min-h-full max-w-5xl rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">{NoteWorkspaceContent(false)}</article></div>
+      </section>}
     </section>
     <aside className={`flex shrink-0 border-l border-slate-200 bg-white transition-[width] duration-300 ${messageBoardCollapsed ? "w-[64px]" : "w-[456px]"}`} aria-label="科研画布右侧栏">
       {!messageBoardCollapsed && <div className="flex min-w-0 flex-1 flex-col">
-        {activeSidebarTab.startsWith("note-") && selected ? <>
-          <header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-600 text-white"><FileText className="h-4 w-4" /></span><div className="min-w-0 flex-1"><p className="text-[10px] font-medium text-blue-600">节点笔记</p><h2 className="truncate text-sm font-semibold">{selected.title}</h2></div><button onClick={() => setFullScreen(true)} className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50" aria-label="全屏查看笔记" title="全屏查看"><Maximize2 className="h-4 w-4" /></button></header>
-          <div className="min-h-0 flex-1 overflow-auto bg-[#fafbfc] p-3"><article className="min-h-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">{NoteWorkspaceContent(false)}</article></div>
+        {activeSidebarTab === "canvas-agent" ? <>
+          <header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3"><button type="button" onClick={() => setActiveSidebarTab("all-agents")} className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="返回 Agent 列表" title="返回 Agent 列表"><ArrowLeft className="h-4 w-4" />{Object.entries(agentUnreadCounts).reduce((sum, [id, count]) => id === activeAgent.id ? sum : sum + count, 0) > 0 && <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-red-500 px-1 text-[9px] font-semibold text-white">{Object.entries(agentUnreadCounts).reduce((sum, [id, count]) => id === activeAgent.id ? sum : sum + count, 0)}</span>}</button><span className="relative grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white"><Bot className="h-4 w-4" /><span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" /></span><label className="min-w-0 flex-1"><span className="block text-[10px] font-medium text-violet-600">当前 Agent</span><span className="mt-0.5 flex items-center gap-1"><select value="project-assistant" onChange={(event) => switchSidebarAgent(event.target.value)} className="min-w-0 flex-1 cursor-pointer appearance-none bg-transparent text-sm font-semibold outline-none">{projectAgents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select><ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" /></span></label></header>
+          <div className="min-h-0 flex-1 space-y-3 overflow-auto bg-slate-50/70 p-3">{canvasAgentMessages.map((message, index) => <div key={index} className={`max-w-[92%] rounded-xl px-3 py-2.5 text-xs leading-5 ${message.role === "user" ? "ml-auto bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600"}`}>{message.text}</div>)}</div>
+          <footer className="border-t border-slate-200 p-3"><div className="rounded-xl border border-slate-200 p-2 focus-within:border-violet-300"><textarea value={canvasAgentInput} onChange={(event) => setCanvasAgentInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); runCanvasAgent(); } }} rows={2} placeholder="让项目助手更新画布…" className="w-full resize-none px-1 text-xs leading-5 outline-none" /><div className="flex justify-end"><button onClick={runCanvasAgent} disabled={!canvasAgentInput.trim()} className="grid h-8 w-8 place-items-center rounded-lg bg-violet-600 text-white disabled:bg-slate-200"><Send className="h-3.5 w-3.5" /></button></div></div></footer>
+        </> : activeSidebarTab === "agent-conversation" ? <>
+          <header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3"><button type="button" onClick={() => setActiveSidebarTab("all-agents")} className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="返回 Agent 列表" title="返回 Agent 列表"><ArrowLeft className="h-4 w-4" />{Object.entries(agentUnreadCounts).reduce((sum, [id, count]) => id === activeAgent.id ? sum : sum + count, 0) > 0 && <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-red-500 px-1 text-[9px] font-semibold text-white">{Object.entries(agentUnreadCounts).reduce((sum, [id, count]) => id === activeAgent.id ? sum : sum + count, 0)}</span>}</button><span className="relative grid h-9 w-9 place-items-center rounded-xl bg-violet-100 text-violet-700"><Bot className="h-4 w-4" /><span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" /></span><label className="min-w-0 flex-1"><span className="block text-[10px] font-medium text-violet-600">{agentSidebarTools.find((tool) => tool.id === activeAgentTool)?.label} · 当前 Agent</span><span className="mt-0.5 flex items-center gap-1"><select value={projectAgents.some((agent) => agent.id === activeAgent.id) ? activeAgent.id : ""} onChange={(event) => switchSidebarAgent(event.target.value)} className="min-w-0 flex-1 cursor-pointer appearance-none bg-transparent text-sm font-semibold outline-none">{!projectAgents.some((agent) => agent.id === activeAgent.id) && <option value="">{activeAgent.name}</option>}{projectAgents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select><ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" /></span><span className="block truncate text-[10px] text-slate-400">{activeAgent.nodeTitle}</span></label></header>
+          <div className="min-h-0 flex-1 overflow-auto bg-slate-50/70 p-3">
+            {(activeAgentTool === "common" || activeAgentTool === "ask") && <div className="space-y-3">
+              {activeAgentTool === "common" && <div className="grid grid-cols-2 gap-2 pb-2">{[["灵感发现", Lightbulb], ["论文复现", FlaskConical], ["文献综述", BookOpen], ["论文评审", Check], ["Idea 升华", Sparkles], ["LaTeX 写作", FileText]].map(([label, Icon]) => <button key={label as string} className="rounded-xl border border-slate-200 bg-white p-3 text-left text-[11px] font-medium text-slate-700 hover:border-violet-200 hover:bg-violet-50/40"><Icon className="mb-2 h-4 w-4 text-violet-600" />{label as string}</button>)}</div>}
+              {agentPanelMessages.map((message, index) => <div key={index} className={`max-w-[92%] rounded-xl px-3 py-2.5 text-xs leading-5 ${message.role === "user" ? "ml-auto bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600"}`}>{message.text}</div>)}
+            </div>}
+            {activeAgentTool === "plan" && <div><h3 className="text-sm font-semibold">研究计划</h3><p className="mt-1 text-[10px] text-slate-400">与当前节点同步</p><div className="mt-4 space-y-2">{["检查研究问题与证据范围", "搜索核心文献和可用数据集", "生成基线、变量与评价指标", "运行实验并回写画布结果"].map((item, index) => <div key={item} className="flex gap-3 rounded-xl border border-slate-200 bg-white p-3"><span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[9px] font-semibold ${index < 1 ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{index + 1}</span><span className="text-xs leading-5 text-slate-600">{item}</span></div>)}</div></div>}
+            {activeAgentTool === "files" && <div><h3 className="text-sm font-semibold">任务文件</h3><div className="mt-4 space-y-2">{["experiment-config.yaml", "evidence-table.csv", "agent-run-log.md"].map((file) => <button key={file} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left"><File className="h-4 w-4 text-blue-600" /><span className="truncate text-xs font-medium">{file}</span></button>)}</div></div>}
+            {activeAgentTool === "search" && <div><h3 className="text-sm font-semibold">搜索</h3><label className="mt-4 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><Search className="h-4 w-4 text-slate-400" /><input defaultValue={activeAgent.nodeTitle} className="min-w-0 flex-1 text-xs outline-none" /></label><div className="mt-3 space-y-2">{["Lost in the Middle", "RULER Benchmark", "NeedleBench"].map((item) => <div key={item} className="rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-600">{item}</div>)}</div></div>}
+            {activeAgentTool === "note" && <div><h3 className="text-sm font-semibold">科研笔记</h3><textarea defaultValue={`# ${activeAgent.nodeTitle}\n\n${activeAgent.name} 正在记录证据、实验设置与中间结论。`} className="mt-4 min-h-80 w-full resize-none rounded-xl border border-slate-200 bg-white p-3 text-xs leading-6 outline-none focus:border-violet-300" /></div>}
+            {activeAgentTool === "gpu" && <div><h3 className="text-sm font-semibold">GPU 环境</h3><div className="mt-4 rounded-xl border border-emerald-200 bg-white p-4"><div className="flex items-center gap-2 text-xs font-semibold text-emerald-700"><Cpu className="h-4 w-4" />NVIDIA A100 80GB</div><p className="mt-2 text-[11px] leading-5 text-slate-500">环境已就绪。CUDA 12.4 · PyTorch 2.5 · 48 GB 可用显存</p><button className="mt-4 rounded-lg bg-slate-950 px-3 py-2 text-xs font-medium text-white">打开环境</button></div></div>}
+          </div>
+          {(activeAgentTool === "common" || activeAgentTool === "ask") && <footer className="border-t border-slate-200 p-3"><div className="rounded-xl border border-slate-200 p-2 focus-within:border-violet-300"><textarea value={agentPanelInput} onChange={(event) => setAgentPanelInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendAgentPanelMessage(); } }} rows={2} placeholder={`给 ${activeAgent.name} 发消息…`} className="w-full resize-none px-1 text-xs leading-5 outline-none" /><div className="flex justify-end"><button onClick={sendAgentPanelMessage} disabled={!agentPanelInput.trim()} className="grid h-8 w-8 place-items-center rounded-lg bg-violet-600 text-white disabled:bg-slate-200"><Send className="h-3.5 w-3.5" /></button></div></div></footer>}
         </> : activeSidebarTab === "all-agents" ? <>
           <header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-violet-600 text-white"><Users className="h-4 w-4" /></span>
@@ -1155,30 +1336,30 @@ export function ResearchTree({
           <div className="min-h-0 flex-1 overflow-auto bg-slate-50/70 p-3">
             <div className="space-y-2">
               {[...projectAgents].sort((a, b) => b.lastUsedAt - a.lastUsedAt).map((agent) => (
-                <button key={agent.id} type="button" onClick={() => setAgentDialog({ name: agent.name, nodeTitle: projectTitle })} className="group flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-violet-200 hover:bg-violet-50/40 hover:shadow-sm">
+                <button key={agent.id} type="button" onClick={() => switchSidebarAgent(agent.id)} className="group flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-violet-200 hover:bg-violet-50/40 hover:shadow-sm">
                   <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-700"><Bot className="h-5 w-5" /><span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${agent.status === "在线" || agent.status === "运行中" ? "bg-emerald-500" : agent.status === "等待中" ? "bg-amber-400" : "bg-slate-300"}`} /></span>
                   <span className="min-w-0 flex-1"><span className="flex items-center gap-2"><strong className="truncate text-xs font-semibold text-slate-800">{agent.name}</strong><span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-medium ${agent.status === "在线" || agent.status === "运行中" ? "bg-emerald-50 text-emerald-700" : agent.status === "等待中" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}>{agent.status}</span></span><span className="mt-1 block truncate text-[10px] text-slate-400">{agent.description}</span></span>
+                  {!!agentUnreadCounts[agent.id] && <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-red-500 px-1.5 text-[10px] font-semibold text-white" aria-label={`${agentUnreadCounts[agent.id]} 条新消息`}>{agentUnreadCounts[agent.id]}</span>}
                   <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-violet-500" />
                 </button>
               ))}
             </div>
           </div>
         </> : <>
-          <header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-950 text-white"><MessageSquare className="h-4 w-4" /></span><div className="min-w-0 flex-1"><h2 className="text-sm font-semibold">项目留言板</h2><p className="truncate text-[10px] text-slate-400">成员与 Agent 共享</p></div></header>
+          <header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-950 text-white"><MessageSquare className="h-4 w-4" /></span><div className="min-w-0 flex-1"><h2 className="text-sm font-semibold">消息通知</h2><p className="truncate text-[10px] text-slate-400">项目成员与 Agent 的画布动态</p></div></header>
           <div className="min-h-0 flex-1 space-y-3 overflow-auto bg-slate-50/70 p-3">{boardMessages.map((message, index) => <article key={index} className="rounded-xl border border-slate-200 bg-white p-3"><div className="flex items-center gap-2"><span className={`grid h-7 w-7 place-items-center rounded-full text-[10px] font-semibold text-white ${message.role === "agent" ? "bg-violet-600" : "bg-slate-700"}`}>{message.role === "agent" ? <Bot className="h-3.5 w-3.5" /> : message.author.slice(-1)}</span><strong className="min-w-0 flex-1 truncate text-xs">{message.author}</strong><span className="text-[9px] text-slate-400">刚刚</span></div><p className="mt-2 text-[11px] leading-5 text-slate-600">{message.text}</p>{message.role === "agent" && index === 2 && agentLaunchDecision === "pending" && <div className="mt-3 grid grid-cols-2 gap-2"><button onClick={() => { setAgentLaunchDecision("running"); setBoardMessages((items) => [...items, { author: "数据集调研 Agent", role: "agent", text: "任务已启动，正在检查 RULER 与 NeedleBench 的数据许可和评测脚本。" }]); }} className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-medium text-white hover:bg-violet-700">启动</button><button onClick={() => setAgentLaunchDecision("cancelled")} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50">取消</button></div>}{message.role === "agent" && index === 2 && agentLaunchDecision === "running" && <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-medium text-emerald-700"><LoaderCircle className="h-3 w-3 animate-spin" />Agent 运行中</span>}{message.role === "agent" && index === 2 && agentLaunchDecision === "cancelled" && <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-medium text-slate-500">已取消启动</span>}</article>)}</div>
-          <footer className="relative border-t border-slate-200 p-3">{boardMentionOpen && <div className="absolute bottom-[62px] left-3 right-3 z-20 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl"><p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Mention 项目成员或 Agent</p>{[
-            { name: "博一新生林沐", type: "项目成员" }, { name: "博三学长周启", type: "项目成员" }, { name: "导师陈教授", type: "项目成员" }, { name: "项目助手", type: "Agent" }, { name: "数据集调研 Agent", type: "Agent" }, { name: "实验复现 Agent", type: "Agent" },
-          ].map((person) => <button key={person.name} onClick={() => { setMessageDraft((value) => `${value.replace(/@[^@]*$/, "")}@${person.name} `); setBoardMentionOpen(false); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-violet-50"><span className={`grid h-7 w-7 place-items-center rounded-full text-[10px] font-semibold text-white ${person.type === "Agent" ? "bg-violet-600" : "bg-slate-700"}`}>{person.type === "Agent" ? <Bot className="h-3.5 w-3.5" /> : person.name.slice(-1)}</span><span className="min-w-0 flex-1 truncate text-xs font-medium">{person.name}</span><span className="text-[10px] text-slate-400">{person.type}</span></button>)}</div>}<div className="flex gap-2"><input value={messageDraft} onChange={(event) => { const value = event.target.value; setMessageDraft(value); setBoardMentionOpen(value.endsWith("@")); }} onKeyDown={(event) => { if (event.key === "Escape") setBoardMentionOpen(false); if (event.key === "Enter" && messageDraft.trim()) { setBoardMessages((items) => [...items, { author: "博一新生林沐", role: "user", text: messageDraft.trim() }]); setMessageDraft(""); setBoardMentionOpen(false); } }} placeholder="给成员和 Agent 留言，输入 @ Mention" className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-violet-400" /><button onClick={() => { if (!messageDraft.trim()) return; setBoardMessages((items) => [...items, { author: "博一新生林沐", role: "user", text: messageDraft.trim() }]); setMessageDraft(""); }} className="grid h-9 w-9 place-items-center rounded-xl bg-slate-950 text-white"><Send className="h-4 w-4" /></button></div></footer>
+          <footer className="border-t border-slate-200 px-4 py-3 text-[10px] text-slate-400">通知由成员操作、Agent 更新和 @ Mention 自动汇总</footer>
         </>}
       </div>}
-      <nav className="flex w-[64px] shrink-0 flex-col items-center gap-2 border-l border-slate-200 bg-white py-3" aria-label="科研画布右侧 Tab">
+      <nav className="flex w-[64px] shrink-0 flex-col items-center gap-2 overflow-y-auto border-l border-slate-200 bg-white py-3" aria-label="科研画布与 Agent 右侧工具栏">
         <button onClick={() => setMessageBoardCollapsed((value) => !value)} className={`rounded-xl p-3 transition ${messageBoardCollapsed ? "bg-slate-950 text-white" : "text-slate-500 hover:bg-slate-100"}`} aria-label={messageBoardCollapsed ? "展开右侧栏" : "收起右侧栏"} title={messageBoardCollapsed ? "展开右侧栏" : "收起右侧栏"}>{messageBoardCollapsed ? <PanelRightOpen className="h-4 w-4" /> : <PanelRightClose className="h-4 w-4" />}</button>
-        <span className="mb-1 h-px w-7 bg-slate-200" />
-        <button onClick={() => setAgentDialog({ name: "项目助手", nodeTitle: projectTitle })} className="group relative mb-1 grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg" aria-label="打开项目助手" title="项目助手"><Bot className="h-5 w-5" /><span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" /><span className="pointer-events-none absolute right-[calc(100%+8px)] top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-slate-950 px-2 py-1 text-[10px] text-white opacity-0 transition group-hover:opacity-100">项目助手</span></button>
-        <span className="mb-1 h-px w-7 bg-slate-200" />
-        <button onClick={() => { setActiveSidebarTab("message-board"); setMessageBoardCollapsed(false); }} className={`relative rounded-xl p-3 ${!messageBoardCollapsed && activeSidebarTab === "message-board" ? "bg-slate-950 text-white" : "text-slate-500 hover:bg-slate-100"}`} aria-label="项目留言板"><MessageSquare className="h-4 w-4" /><span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-red-500 px-1 text-[9px] text-white">2</span></button>
-        <button onClick={() => { setActiveSidebarTab("all-agents"); setMessageBoardCollapsed(false); }} className={`group relative rounded-xl p-3 ${!messageBoardCollapsed && activeSidebarTab === "all-agents" ? "bg-violet-600 text-white" : "text-slate-500 hover:bg-slate-100"}`} aria-label="全部 Agents" title="全部 Agents"><Users className="h-4 w-4" /><span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-violet-600 px-1 text-[9px] text-white">{projectAgents.length}</span><span className="pointer-events-none absolute right-[calc(100%+8px)] top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-slate-950 px-2 py-1 text-[10px] text-white opacity-0 transition group-hover:opacity-100">全部 Agents</span></button>
-        {sidebarTabs.filter((tab) => tab.type === "note").map((tab) => <button key={tab.id} onClick={() => { setSelectedId(tab.nodeId); setSelectedIds(new Set([tab.nodeId])); setActiveSidebarTab(tab.id); setMessageBoardCollapsed(false); }} className={`rounded-xl p-3 ${!messageBoardCollapsed && activeSidebarTab === tab.id ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-100"}`} aria-label={`节点笔记：${tab.title}`} title={tab.title}><FileText className="h-4 w-4" /></button>)}
+        {(activeSidebarTab === "agent-conversation" || activeSidebarTab === "canvas-agent") && <>
+          <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Agent</span>
+          {agentSidebarTools.map((tool) => {
+            const Icon = tool.icon;
+            return <button key={tool.id} onClick={() => { if (activeSidebarTab === "canvas-agent") { setActiveAgent({ id: "project-assistant", name: "项目助手", nodeTitle: projectTitle }); setAgentPanelMessages(canvasAgentMessages); setActiveSidebarTab("agent-conversation"); } setActiveAgentTool(tool.id); setMessageBoardCollapsed(false); }} className={`group relative rounded-xl p-3 transition ${activeAgentTool === tool.id ? "bg-violet-600 text-white" : "text-slate-500 hover:bg-violet-50 hover:text-violet-700"}`} aria-label={tool.label} title={tool.label}><Icon className="h-4 w-4" /><span className="pointer-events-none absolute right-[calc(100%+8px)] top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-slate-950 px-2 py-1 text-[10px] text-white opacity-0 transition group-hover:opacity-100">{tool.label}</span></button>;
+          })}
+        </>}
       </nav>
     </aside>
 
@@ -1189,16 +1370,6 @@ export function ResearchTree({
     {fullScreenAttachment && <div className="fixed inset-0 z-[1220] flex flex-col bg-white">
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 px-6"><div className="flex min-w-0 items-center gap-3"><button onClick={() => setFullScreenAttachment(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="关闭附件全屏预览"><X className="h-5 w-5" /></button><span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-600 text-white"><File className="h-4 w-4" /></span><div className="min-w-0"><p className="text-[10px] text-slate-400">{selected?.title ?? "科研笔记"} / 附件</p><h2 className="truncate text-sm font-semibold">{fullScreenAttachment.title}</h2></div></div><button onClick={() => showToast(`已下载：${fullScreenAttachment.title}`)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50">下载附件</button></header>
       <main className="min-h-0 flex-1 overflow-auto bg-slate-100 p-8"><section className="mx-auto min-h-full max-w-6xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><ProjectAttachmentPreview resource={fullScreenAttachment} /></section></main>
-    </div>}
-    {agentDialog && <div className="fixed inset-0 z-[1250] flex items-center justify-center bg-slate-950/45 p-5" onMouseDown={() => setAgentDialog(null)}>
-      <section className="relative h-[min(860px,94vh)] w-full max-w-7xl overflow-hidden rounded-3xl bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
-        <iframe
-          title={`${agentDialog.name} Agent 对话`}
-          src={`/app/agent?source=research-note&embedded=1&agentName=${encodeURIComponent(agentDialog.name)}&message=${encodeURIComponent(`继续推进「${agentDialog.nodeTitle}」，核对数据许可、评测设置并记录失败分支。`)}`}
-          className="h-full w-full border-0"
-        />
-        <button onClick={() => setAgentDialog(null)} className="absolute right-3 top-3 z-20 grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-md transition hover:bg-slate-100 hover:text-slate-950" aria-label="关闭 Agent 弹窗" title="关闭"><X className="h-4 w-4" /></button>
-      </section>
     </div>}
     {toast && <div className="fixed bottom-6 left-1/2 z-[1300] -translate-x-1/2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm text-white shadow-xl">{toast}</div>}
   </div>;

@@ -2,8 +2,9 @@ import React, { useState, useMemo } from "react";
 import { SearchBar } from "./components/SearchBar";
 import { SearchResults } from "./components/SearchResults";
 import { SearchThinkingPanel } from "./components/SearchThinkingPanel";
+import { SearchContextSidebar } from "./components/SearchContextSidebar";
+import { SurveyPage } from "./components/SurveyPage";
 import { LeftSidebar } from "./components/LeftSidebar";
-import { RightPanel } from "./components/RightPanel";
 import { PaperDetail } from "./components/PaperDetail";
 import { MyLibrary } from "./components/MyLibrary";
 import { ScholarSearchHome, extractAcademicIdentifiers, type AcademicIdentifier } from "./components/ScholarSearchHome";
@@ -20,6 +21,7 @@ import { ResearchCanvas } from "./components/ResearchCanvas";
 import { FigureToPPTX } from "./components/FigureToPPTX";
 import { ToolsPage } from "./components/ToolsPage";
 import { MockConsole } from "./components/MockConsole";
+import { GlobalAskAIDrawer } from "./components/GlobalAskAIDrawer";
 import { QuickPaperPage } from "./components/QuickPaperPage";
 import { SearchMoreButton } from "./components/SearchMoreButton";
 import { InviteModal } from "./components/InviteModal";
@@ -34,10 +36,10 @@ import { Paper, FilterOptions } from "./types";
 
 const viewRoutes: Record<string, string> = {
   home: '/landing',
-  explore: '/',
-  list: '/app/scholar-search',
+  explore: '/app/explore',
+  list: '/app/search',
   'scholar-qa': '/app/ask',
-  'academic-agent': '/app/agent',
+  'academic-agent': '/',
   library: '/app/library',
   'research-projects': '/app/projects',
   'research-canvas': '/app/research-canvas',
@@ -50,16 +52,39 @@ const viewRoutes: Record<string, string> = {
   'quick-paper': '/app/quick-paper',
   truecite: '/app/truecite',
   tools: '/app/tools',
+  survey: '/app/survey',
   'figure-to-pptx': '/app/tools/figure-to-pptx',
 };
 
 const getViewFromPath = (pathname: string) => {
-  if (pathname === '/') return 'explore';
+  if (pathname === '/' || pathname === '/app/agent' || /^\/app\/agent\/[0-9a-f-]+\/?$/i.test(pathname)) return 'academic-agent';
   if (pathname === '/landing') return 'home';
-  if (pathname === '/app/search' || pathname === '/app/explore' || pathname === '/app/ai-feeds') return 'explore';
-  if (pathname === '/scholar-search' || pathname === '/app/scholar-search') return 'list';
+  if (pathname === '/app/explore' || pathname === '/app/ai-feeds') return 'explore';
+  if (pathname === '/app/search' || pathname.startsWith('/app/search/') || pathname === '/scholar-search' || pathname === '/app/scholar-search') return 'list';
   const match = Object.entries(viewRoutes).find(([, route]) => pathname === route || (route === '/app/paper' && pathname.startsWith('/app/paper/')) || (route === '/app/projects' && pathname.startsWith('/app/projects/')));
   return match?.[0] ?? 'home';
+};
+
+const getSearchSessionId = (pathname: string) => {
+  const match = pathname.match(/^\/app\/search\/([0-9a-f-]+)\/?$/i);
+  return match?.[1] ?? null;
+};
+
+const createSearchSessionId = () => {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = character === 'x' ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+};
+
+const getStoredSearchQuery = (sessionId: string | null) => {
+  if (!sessionId || typeof window === 'undefined') return '';
+  return window.sessionStorage.getItem(`wispaper-search:${sessionId}`) ?? '大语言模型长上下文的位置偏差';
 };
 
 // Suppress Figma-specific prop warnings in development
@@ -84,15 +109,18 @@ export default function App() {
     categories: [],
     sortBy: "relevance",
   };
-  const [searchQuery, setSearchQuery] = useState("");
-  const [hasSearched, setHasSearched] = useState(false);
+  const initialSearchSessionId = typeof window !== 'undefined' ? getSearchSessionId(window.location.pathname) : null;
+  const [searchSessionId, setSearchSessionId] = useState<string | null>(initialSearchSessionId);
+  const [searchQuery, setSearchQuery] = useState(() => getStoredSearchQuery(initialSearchSessionId));
+  const [hasSearched, setHasSearched] = useState(Boolean(initialSearchSessionId));
+  const [searchMode, setSearchMode] = useState<'quick' | 'deep'>('quick');
   const [filters, setFilters] = useState<FilterOptions>(defaultFilters);
   const [selectedPaper, setSelectedPaper] =
     useState<Paper | null>(null);
   const initialView = typeof window !== 'undefined' ? getViewFromPath(window.location.pathname) : 'home';
   const embeddedAgent = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('embedded') === '1';
   const [viewMode, setViewMode] = useState<
-    "home" | "explore" | "list" | "quick-paper" | "detail" | "reader" | "library" | "scholar-qa" | "all-feeds" | "paper-reproduction" | "idea-discovery" | "fudan-collection-search" | "academic-agent" | "research-projects" | "research-canvas" | "truecite" | "tools" | "figure-to-pptx"
+    "home" | "explore" | "list" | "quick-paper" | "detail" | "reader" | "library" | "scholar-qa" | "all-feeds" | "paper-reproduction" | "idea-discovery" | "fudan-collection-search" | "academic-agent" | "research-projects" | "research-canvas" | "truecite" | "tools" | "figure-to-pptx" | "survey"
   >(initialView as any);
   const historyNavigationRef = React.useRef(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -109,15 +137,31 @@ export default function App() {
   const [readerInitialFile, setReaderInitialFile] = useState<File | null>(null);
   const [figureToPPTXFromReader, setFigureToPPTXFromReader] = useState(false);
   const [shortcutResults, setShortcutResults] = useState<Paper[] | null>(null);
+  const [surveyQuery, setSurveyQuery] = useState(() => getStoredSearchQuery(initialSearchSessionId) || 'Group Relative Policy Optimization GRPO');
 
   React.useEffect(() => {
-    if (window.location.pathname === '/app/search' || window.location.pathname === '/app/ai-feeds' || window.location.pathname === '/app/explore') {
-      window.history.replaceState({ view: 'explore' }, '', '/');
+    if (window.location.pathname === '/app/ai-feeds') {
+      window.history.replaceState({ view: 'explore' }, '', '/app/explore');
+    } else if (window.location.pathname === '/app/agent') {
+      window.history.replaceState({ view: 'academic-agent' }, '', '/');
+    } else if (window.location.pathname === '/scholar-search' || window.location.pathname === '/app/scholar-search') {
+      window.history.replaceState({ view: 'list' }, '', '/app/search');
     }
 
     const handlePopState = () => {
+      const nextView = getViewFromPath(window.location.pathname);
+      const nextSearchSessionId = getSearchSessionId(window.location.pathname);
       historyNavigationRef.current = true;
-      setViewMode(getViewFromPath(window.location.pathname) as any);
+      setViewMode(nextView as any);
+      if (nextView === 'academic-agent') { setInitialAgentPrompt(''); setAgentKey((value) => value + 1); }
+      setSearchSessionId(nextSearchSessionId);
+      setHasSearched(nextView === 'list' && Boolean(nextSearchSessionId));
+      if (nextSearchSessionId) {
+        setSearchQuery(getStoredSearchQuery(nextSearchSessionId));
+      } else if (nextView === 'list') {
+        setSearchQuery('');
+        setShortcutResults(null);
+      }
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -130,11 +174,15 @@ export default function App() {
       return;
     }
 
-    const nextPath = viewRoutes[viewMode] ?? '/';
+    const nextPath = viewMode === 'academic-agent' && /^\/app\/agent\/[0-9a-f-]+\/?$/i.test(window.location.pathname)
+      ? window.location.pathname
+      : viewMode === 'list' && hasSearched && searchSessionId
+      ? `/app/search/${searchSessionId}`
+      : viewRoutes[viewMode] ?? '/';
     if (window.location.pathname !== nextPath) {
       window.history.pushState({ view: viewMode }, '', nextPath);
     }
-  }, [viewMode]);
+  }, [viewMode, hasSearched, searchSessionId]);
 
   const resolveShortcutPaper = (identifier: AcademicIdentifier): Paper => {
     const cleanValue = identifier.value.replace(/v\d+$/i, '');
@@ -266,10 +314,14 @@ export default function App() {
     setViewMode(view as any);
   };
 
-  const handleSearch = (query: string) => {
+  const handleSearch = (query: string, mode: 'quick' | 'deep' = 'quick') => {
+    const sessionId = createSearchSessionId();
     const identifiers = extractAcademicIdentifiers(query);
     setShortcutResults(identifiers.length > 0 ? identifiers.map(resolveShortcutPaper) : null);
     setSearchQuery(query);
+    setSearchMode(mode);
+    setSearchSessionId(sessionId);
+    window.sessionStorage.setItem(`wispaper-search:${sessionId}`, query);
     setHasSearched(true);
   };
 
@@ -288,6 +340,7 @@ export default function App() {
     setShortcutResults(null);
     if (!query.trim()) {
       setHasSearched(false);
+      setSearchSessionId(null);
     }
   };
 
@@ -304,6 +357,7 @@ export default function App() {
   const handleResetSearch = () => {
     setSearchQuery('');
     setHasSearched(false);
+    setSearchSessionId(null);
     setFilters(defaultFilters);
     setShortcutResults(null);
   };
@@ -315,22 +369,22 @@ export default function App() {
     setViewMode("list");
 
     if (query?.trim()) {
-      setSearchQuery(query.trim());
-      setHasSearched(true);
+      handleSearch(query.trim());
       return;
     }
 
     setSearchQuery('');
     setHasSearched(false);
+    setSearchSessionId(null);
   };
 
-  const isReaderView = viewMode === "explore" || viewMode === "detail" || viewMode === "reader" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas";
+  const isReaderView = viewMode === "explore" || viewMode === "list" || viewMode === "detail" || viewMode === "reader" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "survey";
 
   return (
     <LanguageProvider>
-      <div className={isReaderView ? "h-screen overflow-hidden bg-white flex" : "min-h-screen bg-white flex"}>
+      <div className={`${isReaderView ? "h-screen overflow-hidden bg-white flex" : "min-h-screen bg-white flex"} ${!embeddedAgent ? "pr-[360px]" : ""}`}>
         {/* Left Sidebar - Only show in list view, library view, and scholar-qa view */}
-        {!embeddedAgent && (viewMode === "explore" || viewMode === "list" || viewMode === "reader" || viewMode === "library" || viewMode === "scholar-qa" || viewMode === "all-feeds" || viewMode === "paper-reproduction" || viewMode === "idea-discovery" || viewMode === "fudan-collection-search" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "truecite" || viewMode === "tools" || viewMode === "figure-to-pptx") && (
+        {!embeddedAgent && (viewMode === "explore" || viewMode === "list" || viewMode === "reader" || viewMode === "library" || viewMode === "scholar-qa" || viewMode === "all-feeds" || viewMode === "paper-reproduction" || viewMode === "idea-discovery" || viewMode === "fudan-collection-search" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "truecite" || viewMode === "tools" || viewMode === "figure-to-pptx" || viewMode === "survey") && (
           <LeftSidebar
             onNavigate={handleWorkspaceNavigate}
             onOpenInvite={() => setShowInviteModal(true)}
@@ -411,26 +465,47 @@ export default function App() {
             ) : (
               // Show search results
               <>
-                <div className="bg-white border-b border-gray-200 px-6 py-4">
-                  <SearchBar
-                    value={searchQuery}
-                    onChange={handleSearchChange}
-                    filters={filters}
-                    onFiltersChange={setFilters}
-                  />
-                </div>
-
-                {!shortcutResults && <SearchThinkingPanel query={searchQuery} />}
-
-                <div className="flex-1 overflow-hidden">
-                  <SearchResults
-                    papers={filteredPapers}
-                    books={mockBooks}
-                    theses={mockTheses}
-                    selectedPaper={selectedPaper}
-                    onSelectPaper={handleSelectPaper}
-                    searchQuery={searchQuery}
-                  />
+                <div className="flex-1 overflow-hidden bg-slate-50/60 px-6 py-4">
+                  <div className="mx-auto flex h-full w-full max-w-[1360px] gap-4">
+                    <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                      <div className="border-b border-slate-200 px-6 py-4">
+                        <SearchBar
+                          value={searchQuery}
+                          onChange={handleSearchChange}
+                          filters={filters}
+                          onFiltersChange={setFilters}
+                        />
+                      </div>
+                      {!shortcutResults && <SearchThinkingPanel query={searchQuery} />}
+                      <div className="min-h-0 flex-1 overflow-hidden">
+                        <SearchResults
+                          papers={filteredPapers}
+                          books={mockBooks}
+                          theses={mockTheses}
+                          selectedPaper={selectedPaper}
+                          onSelectPaper={handleSelectPaper}
+                          searchQuery={searchQuery}
+                        />
+                      </div>
+                    </div>
+                    <SearchContextSidebar
+                      key={searchSessionId ?? 'search-draft'}
+                      query={searchQuery}
+                      resultCount={filteredPapers.length}
+                      sessionId={searchSessionId ?? 'search-draft'}
+                      mode={searchMode}
+                      onStartDeepSearch={() => setSearchMode('deep')}
+                      onOpenAgent={(prompt) => {
+                        setInitialAgentPrompt(prompt);
+                        setAgentKey((value) => value + 1);
+                        setViewMode('academic-agent');
+                      }}
+                      onOpenSurvey={() => {
+                        setSurveyQuery(searchQuery);
+                        setViewMode('survey');
+                      }}
+                    />
+                  </div>
                 </div>
               </>
             )
@@ -441,6 +516,16 @@ export default function App() {
               onOpenReader={(file) => {
                 setReaderInitialFile(file ?? null);
                 setViewMode("reader");
+              }}
+            />
+          ) : viewMode === "survey" ? (
+            <SurveyPage
+              query={surveyQuery}
+              onBack={() => setViewMode('list')}
+              onOpenAgent={(prompt) => {
+                setInitialAgentPrompt(prompt);
+                setAgentKey((value) => value + 1);
+                setViewMode('academic-agent');
               }}
             />
           ) : viewMode === "reader" ? (
@@ -490,7 +575,10 @@ export default function App() {
           ) : viewMode === "idea-discovery" ? (
             <IdeaDiscovery />
           ) : viewMode === "academic-agent" ? (
-            <AcademicAgent key={agentKey} initialPrompt={initialAgentPrompt} onOpenProjects={() => {
+            <AcademicAgent key={agentKey} initialPrompt={initialAgentPrompt} onLogin={() => setShowPaywallModal(true)} onOpenSearch={(query) => {
+              setViewMode("list");
+              handleSearch(query);
+            }} onOpenProjects={() => {
               if (embeddedAgent && window.parent !== window) {
                 window.parent.postMessage({ type: 'wispaper:close-agent-dialog', destination: 'research-canvas' }, window.location.origin);
                 return;
@@ -528,11 +616,6 @@ export default function App() {
           )}
         </div>
 
-        {/* Right Panel - Only show in list view with search results */}
-        {viewMode === "list" && hasSearched && !shortcutResults && (
-          <RightPanel selectedPaper={selectedPaper} />
-        )}
-
         {/* Search More Button - Show only in list view with search results */}
         {viewMode === "list" && hasSearched && !shortcutResults && filteredPapers.length > 0 && (
           <SearchMoreButton onSearchMore={handleSearchMore} isLoading={isLoadingMore} />
@@ -561,6 +644,10 @@ export default function App() {
           isOpen={showNotificationDrawer}
           onClose={() => setShowNotificationDrawer(false)}
         />
+
+        {!embeddedAgent && !['explore', 'library', 'academic-agent', 'research-projects'].includes(viewMode) && !(viewMode === 'list' && hasSearched) && (
+          <GlobalAskAIDrawer key={viewMode} page={viewMode} />
+        )}
 
         {!embeddedAgent && <MockConsole
           currentView={viewMode}

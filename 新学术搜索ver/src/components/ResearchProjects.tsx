@@ -191,8 +191,8 @@ export function ResearchProjects({ onOpenAgent }: { onOpenAgent: () => void }) {
   if (selected) {
     return (
       <div className="flex h-screen min-w-0 flex-1 flex-col bg-white">
-        <header className="border-b border-slate-200 px-6 pt-4">
-          <div className="flex items-center justify-between">
+        <header className="border-b border-slate-200 px-6 py-2.5">
+          <div className="flex min-h-12 items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
               <button
                 onClick={() => { setSelected(null); window.history.pushState({ view: "research-projects" }, "", "/app/projects"); }}
@@ -209,6 +209,12 @@ export function ResearchProjects({ onOpenAgent }: { onOpenAgent: () => void }) {
                 <p className="truncate text-xs text-slate-500">{selected.description}</p>
               </div>
             </div>
+            <nav className="flex h-12 min-w-0 flex-1 items-stretch gap-1" aria-label="项目工作区">
+              {projectTabs.map((tab) => {
+                const Icon = tab.icon;
+                return <button key={tab.id} onClick={() => setSection(tab.id)} className={`relative flex items-center gap-2 px-3 text-sm transition ${section === tab.id ? "font-medium text-slate-950" : "text-slate-500 hover:text-slate-800"}`}><Icon className="h-4 w-4" />{tab.label}{section === tab.id && <span className="absolute inset-x-2 -bottom-2.5 h-0.5 rounded-full bg-slate-950" />}</button>;
+              })}
+            </nav>
             <div className="flex items-center gap-2">
               <button onClick={() => setShowCollaboration(true)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium hover:bg-slate-50">
                 <Users className="mr-2 inline h-4 w-4" />协作
@@ -224,23 +230,6 @@ export function ResearchProjects({ onOpenAgent }: { onOpenAgent: () => void }) {
               </button>
             </div>
           </div>
-          <nav className="mt-5 flex gap-6 pl-13">
-            {projectTabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setSection(tab.id)}
-                  className={`flex items-center gap-2 border-b-2 pb-3 text-sm ${
-                    section === tab.id ? "border-slate-950 font-medium text-slate-950" : "border-transparent text-slate-500"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </nav>
         </header>
 
         <main className={`min-h-0 flex-1 overflow-y-auto bg-[#f7f8fa] ${section === "tree" ? "p-3" : "p-7"}`}>
