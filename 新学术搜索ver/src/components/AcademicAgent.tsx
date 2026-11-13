@@ -552,7 +552,6 @@ function AgentComposer({
   const selectedTask = quickTasks.find((task) => task.title === selectedSkill)
     ?? launchShortcuts.find((shortcut) => shortcut.title === selectedSkill);
   const SelectedSkillIcon = selectedTask?.icon;
-  const isPaperSearch = selectedSkill === "搜索文献";
   const usesLaunchOptions = ["文献综述", "灵感发现", "论文评审", "组会 PPT"].includes(selectedSkill ?? "");
   const projectOptions = ["Default Project", "长上下文模型位置偏差研究", "多模态 Agent 评测", "非小细胞肺癌免疫治疗"];
 
@@ -684,7 +683,7 @@ function AgentComposer({
           />
         </div>
         <div className="flex items-end justify-between gap-3">
-          {!onboardingMode && <div className={`flex min-w-0 flex-1 flex-wrap items-center gap-2 transition-all duration-300 ${isPaperSearch ? "pointer-events-none max-w-0 -translate-y-1 overflow-hidden opacity-0" : "max-w-full translate-y-0 opacity-100"}`}>
+          {!onboardingMode && <div className="flex min-w-0 max-w-full flex-1 translate-y-0 flex-wrap items-center gap-2 opacity-100 transition-all duration-300">
             <button
               type="button"
               onClick={() => {
@@ -1605,6 +1604,7 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
   const landingInputRef = useRef<HTMLDivElement>(null);
   const [inputFlight, setInputFlight] = useState<{ from: DOMRect; to: DOMRect; text: string; task: string | null; moving: boolean } | null>(null);
   const [landingPhase, setLandingPhase] = useState<"idle" | "waiting" | "revealing">("idle");
+  const [autoSubmitIntent, setAutoSubmitIntent] = useState<{ value: string; skill: string | null } | null>(null);
   const [introProgress, setIntroProgress] = useState([0, 0]);
   const [needProgress, setNeedProgress] = useState(0);
   const [selectedSkill, setSelectedSkill] = useState<string | null>(linkedAgentSession?.skill ?? null);
@@ -1757,10 +1757,11 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
     const taskMatch = submitted.match(/^\[([^\]]+)\]\s*(.*)$/);
     const task = taskMatch?.[1] ?? null;
     const value = taskMatch?.[2] ?? submitted;
+    const skill = task ? (({ "Literature Review": "文献综述", "Idea Discovery": "灵感发现", "Paper Review": "论文评审", "Paper Search": "搜索文献", "Experiment Design": "实验设计" } as Record<string, string>)[task] ?? task) : null;
     if (!value) return;
     const from = onboardingInputRef.current?.getBoundingClientRect();
     try { window.localStorage.setItem("wispaper-agent-onboarding-v1", "done"); } catch { /* prototype storage */ }
-    if (task) flushSync(() => setSelectedSkill(({ "Literature Review": "文献综述", "Idea Discovery": "灵感发现", "Paper Review": "论文评审", "Paper Search": "搜索文献", "Experiment Design": "实验设计" } as Record<string, string>)[task] ?? task));
+    if (skill) flushSync(() => setSelectedSkill(skill));
     const to = landingInputRef.current?.getBoundingClientRect();
     if (from && to) {
       setLandingPhase("waiting");
@@ -1770,15 +1771,17 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
         setPrompt(value);
         setInputFlight(null);
         setLandingPhase("revealing");
-        window.setTimeout(() => setLandingPhase("idle"), 700);
+        window.setTimeout(() => { setLandingPhase("idle"); setAutoSubmitIntent({ value, skill }); }, 700);
       }, 780);
     } else {
       setPrompt(value);
+      setAutoSubmitIntent({ value, skill });
     }
     setOnboardingOpen(false);
   };
   const closeOnboarding = () => {
     try { window.localStorage.setItem("wispaper-agent-onboarding-v1", "done"); } catch { /* prototype storage */ }
+    setAutoSubmitIntent(null);
     setOnboardingOpen(false);
   };
 
@@ -1910,6 +1913,19 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
   useEffect(() => {
     if (initialPrompt.trim()) submit(initialPrompt);
   }, [initialPrompt]);
+
+  useEffect(() => {
+    if (!autoSubmitIntent || onboardingOpen || landingPhase !== "idle" || started) return;
+    if (prompt !== autoSubmitIntent.value || selectedSkill !== autoSubmitIntent.skill) {
+      setAutoSubmitIntent(null);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setAutoSubmitIntent(null);
+      submit(autoSubmitIntent.value);
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [autoSubmitIntent, onboardingOpen, landingPhase, started, prompt, selectedSkill, isAuthenticated, userCredits]);
 
   const activateNextTodo = (items: AgentTodo[], afterId?: string) => {
     const startIndex = afterId ? items.findIndex((todo) => todo.id === afterId) + 1 : 0;
