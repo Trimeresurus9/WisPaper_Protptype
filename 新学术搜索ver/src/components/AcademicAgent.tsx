@@ -1614,7 +1614,8 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
   const landingInputRef = useRef<HTMLDivElement>(null);
   const [inputFlight, setInputFlight] = useState<{ from: DOMRect; to: DOMRect; text: string; task: string | null; moving: boolean } | null>(null);
   const [landingPhase, setLandingPhase] = useState<"idle" | "waiting" | "revealing">("idle");
-  const [autoSubmitIntent, setAutoSubmitIntent] = useState<{ value: string; skill: string | null } | null>(null);
+  const [homeGuidePending, setHomeGuidePending] = useState(false);
+  const [homeGuideStep, setHomeGuideStep] = useState<0 | 1 | 2 | 3>(0);
   const [introProgress, setIntroProgress] = useState([0, 0]);
   const [needProgress, setNeedProgress] = useState(0);
   const [selectedSkill, setSelectedSkill] = useState<string | null>(linkedAgentSession?.skill ?? null);
@@ -1782,18 +1783,19 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
         setPrompt(value);
         setInputFlight(null);
         setLandingPhase("revealing");
-        window.setTimeout(() => { setLandingPhase("idle"); setAutoSubmitIntent({ value, skill }); }, 700);
+        window.setTimeout(() => { setLandingPhase("idle"); setHomeGuidePending(true); }, 700);
       }, 780);
     } else {
       setPrompt(value);
-      setAutoSubmitIntent({ value, skill });
+      setHomeGuidePending(true);
     }
     setOnboardingOpen(false);
   };
   const closeOnboarding = () => {
     try { window.localStorage.setItem("wispaper-agent-onboarding-v1", "done"); } catch { /* prototype storage */ }
     clearOnboardingDemoParams();
-    setAutoSubmitIntent(null);
+    setHomeGuidePending(false);
+    setHomeGuideStep(0);
     setOnboardingOpen(false);
   };
 
@@ -1803,6 +1805,8 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
       setOnboardingStep("discipline");
       setOnboardingDiscipline("");
       setOnboardingNeed("");
+      setHomeGuidePending(false);
+      setHomeGuideStep(0);
       setOnboardingOpen(true);
     };
     window.addEventListener("wispaper:retrigger-agent-onboarding", retrigger);
@@ -1923,17 +1927,19 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
   }, [initialPrompt]);
 
   useEffect(() => {
-    if (!autoSubmitIntent || onboardingOpen || landingPhase !== "idle" || started) return;
-    if (prompt !== autoSubmitIntent.value || selectedSkill !== autoSubmitIntent.skill) {
-      setAutoSubmitIntent(null);
-      return;
-    }
+    if (!homeGuidePending || onboardingOpen || landingPhase !== "idle" || started) return;
     const timer = window.setTimeout(() => {
-      setAutoSubmitIntent(null);
-      submit(autoSubmitIntent.value);
-    }, 900);
+      setHomeGuidePending(false);
+      setHomeGuideStep(1);
+    }, 2000);
     return () => window.clearTimeout(timer);
-  }, [autoSubmitIntent, onboardingOpen, landingPhase, started, prompt, selectedSkill, isAuthenticated, userCredits]);
+  }, [homeGuidePending, onboardingOpen, landingPhase, started]);
+
+  useEffect(() => {
+    if (homeGuideStep !== 1 && homeGuideStep !== 2) return;
+    const timer = window.setTimeout(() => setHomeGuideStep(homeGuideStep === 1 ? 2 : 3), 1800);
+    return () => window.clearTimeout(timer);
+  }, [homeGuideStep]);
 
   const activateNextTodo = (items: AgentTodo[], afterId?: string) => {
     const startIndex = afterId ? items.findIndex((todo) => todo.id === afterId) + 1 : 0;
@@ -2082,8 +2088,8 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
               <div ref={landingInputRef} className="mt-8">
                 <AgentComposer
                   prompt={prompt}
-                  setPrompt={setPrompt}
-                  onSubmit={() => submit()}
+                  setPrompt={(value) => { setPrompt(value); if (homeGuideStep === 2 && value.trim()) setHomeGuideStep(3); }}
+                  onSubmit={() => { setHomeGuideStep(0); submit(); }}
                   selectedAgent={selectedAgent}
                   onAgentChange={setSelectedAgent}
                   shortcutModel={shortcutModel}
@@ -2094,6 +2100,14 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
                   submittingEffect={caseSubmitting}
                 />
               </div>
+              {homeGuideStep > 0 && <div className="mt-4 flex justify-center animate-in fade-in slide-in-from-bottom-2 duration-300" role="status" aria-live="polite">
+                <div className="relative inline-flex max-w-full items-center gap-4 rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm text-slate-700 shadow-lg shadow-blue-100/60">
+                  <span className={`absolute left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 border-blue-100 bg-white ${homeGuideStep === 1 ? "-bottom-1.5 border-b border-r" : "-top-1.5 border-l border-t"}`} aria-hidden="true" />
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#3ea3ff] text-xs font-semibold text-white">{homeGuideStep}</span>
+                  <span>{homeGuideStep === 1 ? (isZh ? "先选择任务" : "First, choose a task") : homeGuideStep === 2 ? (isZh ? "再补充具体要求" : "Then, add your requirements") : (isZh ? "最后点击提交" : "Finally, click submit")}</span>
+                  <button type="button" onClick={() => setHomeGuideStep(0)} className="shrink-0 text-xs text-slate-400 hover:text-blue-600">{isZh ? "跳过" : "Skip"}</button>
+                </div>
+              </div>}
               <div className="mt-5 flex flex-wrap justify-center gap-2.5" aria-label={isZh ? "任务快捷方式" : "Task shortcuts"}>
                 {launchShortcuts.map((shortcut) => {
                   const Icon = shortcut.icon;
@@ -2101,6 +2115,7 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade
                   return <button key={shortcut.title} type="button" onClick={() => {
                     setActiveLaunchShortcut(active ? null : shortcut.title);
                     setSelectedSkill(active ? null : shortcut.title);
+                    if (homeGuideStep === 1) setHomeGuideStep(2);
                   }} className={`inline-flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-medium shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${active ? "border-[#3ea3ff] bg-[#3ea3ff]/10 text-[#2485df]" : "border-slate-200 bg-white text-slate-600 hover:border-[#3ea3ff] hover:text-slate-950"}`}><Icon className="h-4 w-4 text-[#3ea3ff]" />{isZh ? shortcut.title : launchShortcutEnglish[shortcut.title]?.title ?? shortcut.title}</button>;
                 })}
               </div>
