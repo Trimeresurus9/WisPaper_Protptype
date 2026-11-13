@@ -119,6 +119,8 @@ interface AgentCaseStudy {
   outcome: string;
   prompt: string;
   credits: string;
+  skill?: string;
+  sampleIndex?: number;
 }
 
 interface AgentRouteSession {
@@ -127,6 +129,8 @@ interface AgentRouteSession {
   skill: string | null;
   messages: Array<{ role: "user" | "agent"; text: string }>;
   replay?: { title: string; summary: string; outcome: string; model: "Lite" | "Pro" };
+  creditGate?: "agent" | "pro";
+  model?: "Lite" | "Pro";
 }
 
 const openAgentSessionRoute = (session: AgentRouteSession) => {
@@ -516,6 +520,8 @@ function AgentComposer({
   placeholderOverride,
   submittingEffect = false,
   replayModel,
+  shortcutModel,
+  onShortcutModelChange,
 }: {
   prompt: string;
   setPrompt: (value: string) => void;
@@ -531,12 +537,13 @@ function AgentComposer({
   placeholderOverride?: string;
   submittingEffect?: boolean;
   replayModel?: "Lite" | "Pro";
+  shortcutModel: "Lite" | "Pro";
+  onShortcutModelChange: (model: "Lite" | "Pro") => void;
 }) {
   const { language } = useLanguage();
   const [showTools, setShowTools] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [showAgents, setShowAgents] = useState(false);
-  const [shortcutModel, setShortcutModel] = useState<"Lite" | "Pro">("Lite");
   const [showShortcutModels, setShowShortcutModels] = useState(false);
   const [selectedProject, setSelectedProject] = useState("Default Project");
   const [showProjects, setShowProjects] = useState(false);
@@ -700,7 +707,7 @@ function AgentComposer({
                   <button type="button" onClick={() => { setShowShortcutModels((value) => !value); setShowProjects(false); }} className="flex h-9 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">
                     {shortcutModel} <span className="text-slate-400">{shortcutModel === "Lite" ? "×0.36" : "×3.6"}</span><ChevronDown className="h-3.5 w-3.5" />
                   </button>
-                  {showShortcutModels && <div className="absolute bottom-11 left-0 z-40 w-36 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">{(["Lite", "Pro"] as const).map((model) => <button key={model} type="button" onClick={() => { setShortcutModel(model); setShowShortcutModels(false); }} className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs ${shortcutModel === model ? "bg-blue-50 font-semibold text-blue-700" : "text-slate-600 hover:bg-slate-50"}`}><span>{model}</span><span>{model === "Lite" ? "×0.36" : "×3.6"}</span></button>)}</div>}
+                  {showShortcutModels && <div className="absolute bottom-11 left-0 z-40 w-36 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">{(["Lite", "Pro"] as const).map((model) => <button key={model} type="button" onClick={() => { onShortcutModelChange(model); setShowShortcutModels(false); }} className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs ${shortcutModel === model ? "bg-blue-50 font-semibold text-blue-700" : "text-slate-600 hover:bg-slate-50"}`}><span>{model}</span><span>{model === "Lite" ? "×0.36" : "×3.6"}</span></button>)}</div>}
                 </div>
                 <div className="relative min-w-0">
                   <button type="button" onClick={() => { setShowProjects((value) => !value); setShowShortcutModels(false); }} className="flex h-9 max-w-48 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"><FolderKanban className="h-4 w-4 text-slate-500" /><span className="truncate">{selectedProject}</span><ChevronDown className="h-3.5 w-3.5 shrink-0" /></button>
@@ -759,6 +766,13 @@ function AgentLoginComposer({ isZh, onLogin }: { isZh: boolean; onLogin: () => v
   </div>;
 }
 
+function AgentCreditGateCard({ kind, credits, isZh, onUpgrade, onSearch, onUseLite }: { kind: "agent" | "pro"; credits: number; isZh: boolean; onUpgrade: () => void; onSearch: () => void; onUseLite: () => void }) {
+  return <div className="rounded-[20px] border border-amber-200 bg-amber-50/70 p-5 shadow-sm" role="status">
+    <div className="flex items-start gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-700"><CircleGauge className="h-5 w-5" /></span><div><h3 className="text-sm font-semibold text-slate-900">{kind === "agent" ? (isZh ? "当前积分不足以启动 Agent" : "Not enough credits to start an Agent") : (isZh ? "当前积分不足以使用 Pro Agent" : "Not enough credits for Pro Agent")}</h3><p className="mt-1 text-xs leading-5 text-slate-600">{kind === "agent" ? (isZh ? `当前有 ${credits.toLocaleString()} 积分；启动 Agent 至少需要 2,000 积分。你可以升级，或先搜索文献。` : `You have ${credits.toLocaleString()} credits. Starting an Agent requires at least 2,000. Upgrade or search papers first.`) : (isZh ? `当前有 ${credits.toLocaleString()} 积分；Pro Agent 至少需要 40,000 积分。你可以升级，或切换 Lite 继续。` : `You have ${credits.toLocaleString()} credits. Pro Agent requires at least 40,000. Upgrade or continue with Lite.`)}</p></div></div>
+    <div className="mt-4 flex flex-wrap gap-2 pl-12"><button type="button" onClick={onUpgrade} className="rounded-lg bg-[#3ea3ff] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#2485df]">{isZh ? "升级套餐" : "Upgrade"}</button><button type="button" onClick={kind === "agent" ? onSearch : onUseLite} className="rounded-lg border border-amber-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-amber-50">{kind === "agent" ? (isZh ? "搜索文献" : "Search papers") : (isZh ? "使用 Lite" : "Use Lite")}</button></div>
+  </div>;
+}
+
 function AgentLaunchCaseArtwork({ title, task, index, isZh }: { title: string; task: string; index: number; isZh: boolean }) {
   const colors = [
     { bg: "#edf2fa", ink: "#385c95", soft: "#dbe7fa", line: "#aac0df" },
@@ -778,6 +792,9 @@ function AgentLaunchCaseArtwork({ title, task, index, isZh }: { title: string; t
     : task === "灵感发现"
       ? (isZh ? ["论文证据", "研究空白", "验证方案"] : ["Evidence", "Research gap", "Validation"])
       : (isZh ? ["论文 01", "论文 02", "论文 03"] : ["Paper 01", "Paper 02", "Paper 03"]);
+  const isSearch = task === "搜索文献";
+  const isReview = task === "文献综述";
+  const isIdea = task === "灵感发现";
   const previewLines = task === "文献综述"
     ? (isZh ? ["摘要与研究范围", "方法分类与脉络", "证据对照与引用"] : ["Scope and abstract", "Method taxonomy", "Evidence and citations"])
     : isSlides
@@ -789,8 +806,7 @@ function AgentLaunchCaseArtwork({ title, task, index, isZh }: { title: string; t
           : (isZh ? ["候选方向", "创新点", "验证路径"] : ["Directions", "Novelty", "Validation"]);
   return <svg viewBox="0 0 600 360" className="case-artwork" aria-hidden="true" focusable="false">
     <rect width="600" height="360" fill={colors.bg} />
-    <text x="30" y="37" fill={colors.ink} fontSize="12" letterSpacing="2" opacity=".75">WISPAPER / {isSlides ? "PRESENTATION" : "AGENT DELIVERABLE"}</text>
-    <path d="M30 53h540" stroke={colors.line} strokeWidth="1" />
+    <g transform="translate(0 -19)">
     <g className="case-art-diagram" fill="none" stroke={colors.line} strokeWidth="2.5" strokeLinecap="round">
       {sourceLabels.map((_, itemIndex) => <path key={itemIndex} d={`M326 ${130 + itemIndex * 68} C352 ${130 + itemIndex * 68}, 342 ${112 + itemIndex * 76}, 374 ${112 + itemIndex * 76}`} />)}
     </g>
@@ -798,8 +814,27 @@ function AgentLaunchCaseArtwork({ title, task, index, isZh }: { title: string; t
       <rect x="66" y="74" width="260" height="247" rx="15" fill="#fff" stroke={colors.soft} strokeWidth="2" />
       <path d="M91 94h22l11 11v25H91z" fill={colors.soft} stroke={colors.ink} strokeWidth="1.5" strokeLinejoin="round" /><path d="M113 94v11h11" fill="none" stroke={colors.ink} strokeWidth="1.5" />
       <text x="137" y="107" fill={colors.ink} fontSize="14" fontWeight="600">{fileName}</text>
-      <text x="92" y="154" fill="#8a9bad" fontSize="12" letterSpacing="1.5">{isSlides ? "SLIDE DECK" : "RESEARCH FILE"}</text>
-      {previewLines.map((line, lineIndex) => <g key={line}>
+      <text x="92" y="154" fill="#8a9bad" fontSize="12" letterSpacing="1.5">{isSlides ? "SLIDE DECK" : isSearch ? "SEARCH RESULTS" : isReview ? "LITERATURE MAP" : isIdea ? "RESEARCH IDEAS" : "REVIEW NOTES"}</text>
+      {isSearch ? <g>
+        <rect x="91" y="166" width="211" height="28" rx="7" fill={colors.bg} />
+        <circle cx="105" cy="179" r="5" fill="none" stroke={colors.ink} strokeWidth="2" /><path d="m109 183 5 5" stroke={colors.ink} strokeWidth="2" />
+        <path d="M125 180h131" stroke={colors.line} strokeWidth="4" strokeLinecap="round" />
+        {[0, 1, 2].map((row) => <g key={row}><rect x="91" y={203 + row * 34} width="211" height="29" rx="6" fill={row === 0 ? colors.soft : "#f7f9fc"} /><text x="104" y={222 + row * 34} fill={colors.ink} fontSize="11">0{row + 1}</text><path d={`M129 ${218 + row * 34}h${row === 1 ? 115 : 145}`} stroke={colors.line} strokeWidth="4" strokeLinecap="round" /></g>)}
+      </g> : isReview ? <g>
+        <rect x="119" y="166" width="155" height="31" rx="8" fill={colors.ink} /><text x="196" y="186" textAnchor="middle" fill="#fff" fontSize="13">{isZh ? "研究脉络" : "Taxonomy"}</text>
+        <path d="M196 197v19m-68 0h136m-136 0v11m68-11v11m68-11v11" fill="none" stroke={colors.line} strokeWidth="2" />
+        {(isZh ? ["方法", "数据", "评测"] : ["Methods", "Data", "Metrics"]).map((label, row) => <g key={label}><rect x={88 + row * 75} y="227" width="68" height="43" rx="7" fill={colors.soft} /><text x={122 + row * 75} y="253" textAnchor="middle" fill={colors.ink} fontSize="12">{label}</text></g>)}
+        <path d="M103 287h169m-169 12h126" stroke={colors.soft} strokeWidth="5" strokeLinecap="round" />
+      </g> : isIdea ? <g>
+        <path d="M195 197 116 242m79-45 79 45m-79-45v82" fill="none" stroke={colors.line} strokeWidth="2.5" />
+        <circle cx="195" cy="195" r="34" fill={colors.ink} /><path d="M184 189c0-14 22-14 22 0 0 7-7 8-7 16h-8c0-8-7-9-7-16m8 21h7" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" />
+        {[[116, 242], [274, 242], [195, 283]].map(([x, y], row) => <g key={row}><rect x={x - 34} y={y - 15} width="68" height="30" rx="10" fill={colors.soft} /><text x={x} y={y + 5} textAnchor="middle" fill={colors.ink} fontSize="11">{isZh ? ["方向 A", "方向 B", "验证"][row] : ["Idea A", "Idea B", "Test"][row]}</text></g>)}
+      </g> : isSlides ? <g>
+        <rect x="90" y="167" width="153" height="106" rx="7" fill={colors.soft} stroke={colors.line} /><rect x="102" y="181" width="129" height="78" rx="4" fill="#fff" />
+        <path d="M114 193h75m-75 13h97" stroke={colors.ink} strokeWidth="4" strokeLinecap="round" /><rect x="115" y="232" width="15" height="15" rx="2" fill={colors.line} /><rect x="136" y="222" width="15" height="25" rx="2" fill={colors.ink} opacity=".55" /><rect x="157" y="214" width="15" height="33" rx="2" fill={colors.ink} />
+        <rect x="253" y="178" width="47" height="34" rx="4" fill="#fff" stroke={colors.line} /><path d="M261 188h27m-27 7h20" stroke={colors.line} strokeWidth="3" /><rect x="253" y="222" width="47" height="34" rx="4" fill="#fff" stroke={colors.line} /><path d="M261 232h27m-27 7h20" stroke={colors.line} strokeWidth="3" />
+        <text x="93" y="299" fill={colors.ink} fontSize="12">{isZh ? "12 页 · 可编辑" : "12 editable slides"}</text>
+      </g> : previewLines.map((line, lineIndex) => <g key={line}>
         <circle cx="99" cy={181 + lineIndex * 41} r="4" fill={colors.ink} opacity={1 - lineIndex * .2} />
         <text x="112" y={186 + lineIndex * 41} fill="#4e6175" fontSize="15">{line}</text>
         <path d={`M112 ${198 + lineIndex * 41}h${lineIndex === 2 ? 113 : 174}`} stroke={colors.soft} strokeWidth="5" strokeLinecap="round" />
@@ -812,6 +847,7 @@ function AgentLaunchCaseArtwork({ title, task, index, isZh }: { title: string; t
         <path d={`M396 ${106 + itemIndex * 76}h12m-12 6h12m-12 6h8`} stroke={colors.ink} strokeWidth="2" strokeLinecap="round" />
         <text x="425" y={118 + itemIndex * 76} fill={colors.ink} fontSize="14" fontWeight="500">{label}</text>
       </g>)}
+    </g>
     </g>
   </svg>;
 }
@@ -1522,7 +1558,7 @@ function WorkbenchPanel({
   );
 }
 
-export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPrompt = "" }: { onOpenProjects: () => void; onOpenSearch: (query: string) => void; onLogin: () => void; initialPrompt?: string }) {
+export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, onUpgrade, userCredits, initialPrompt = "" }: { onOpenProjects: () => void; onOpenSearch: (query: string) => void; onLogin: () => void; onUpgrade: () => void; userCredits: number; initialPrompt?: string }) {
   const { language } = useLanguage();
   const { isAuthenticated, setAuthenticated } = usePrototypeAuth();
   const isZh = language === "zh";
@@ -1586,6 +1622,9 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
       : [{ role: "agent", text: `已进入 ${linkedConversation.agentName} 对话。你可以继续发送问题或补充科研笔记中的上下文。` }]
     : []));
   const [selectedAgent, setSelectedAgent] = useState<AgentTierId>("balanced");
+  const [shortcutModel, setShortcutModel] = useState<"Lite" | "Pro">("Lite");
+  const [activeTaskModel, setActiveTaskModel] = useState<"Lite" | "Pro" | null>(linkedAgentSession?.model ?? linkedAgentSession?.replay?.model ?? null);
+  const [creditGate, setCreditGate] = useState<"agent" | "pro" | null>(linkedAgentSession?.creditGate ?? null);
   const activeCaseTab = quickTasks[0].title;
   const [activeLaunchShortcut, setActiveLaunchShortcut] = useState<string | null>(null);
   const [caseSubmitting, setCaseSubmitting] = useState(false);
@@ -1597,12 +1636,15 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
   const [canvasFocusRequest, setCanvasFocusRequest] = useState(0);
   const taskCompleted = planAccepted && todos.every((todo) => todo.status === "done" || todo.status === "skipped");
   const taskNeedsAttention = planAccepted && todos.some((todo) => todo.status === "waiting" || todo.status === "blocked" || todo.status === "failed");
-  const activeCaseStudies = quickTaskCaseStudies[activeCaseTab] ?? [];
-  const activeCaseTask = quickTasks.find((task) => task.title === activeCaseTab) ?? quickTasks[0];
+  const defaultCases = useMemo<AgentCaseStudy[]>(() => ["文献综述", "灵感发现", "论文评审"].map((skill) => {
+    const samples = quickTaskSamplePrompts[skill];
+    const sampleIndex = Math.floor(Math.random() * samples.length);
+    return { ...samples[sampleIndex], field: skill, outcome: samples[sampleIndex].prompt, skill, sampleIndex };
+  }), []);
   const selectedShortcut = launchShortcuts.find((shortcut) => shortcut.title === activeLaunchShortcut);
   const visibleCases: AgentCaseStudy[] = selectedShortcut
     ? selectedShortcut.samples.map((sample) => ({ ...sample, field: selectedShortcut.title, outcome: sample.prompt }))
-    : activeCaseStudies;
+    : defaultCases;
 
   useEffect(() => () => caseFillTimersRef.current.forEach(window.clearTimeout), []);
   useEffect(() => {
@@ -1615,9 +1657,9 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
     if (!started || !messages.length) return;
     const match = window.location.pathname.match(/^\/app\/agent\/([0-9a-f-]+)\/?$/i);
     if (!match) return;
-    const session: AgentRouteSession = { kind: caseReplay ? "case" : "task", title: taskTitle, skill: selectedSkill, messages, ...(caseReplay ? { replay: caseReplay } : {}) };
+    const session: AgentRouteSession = { kind: caseReplay ? "case" : "task", title: taskTitle, skill: selectedSkill, messages, ...(caseReplay ? { replay: caseReplay } : {}), ...(creditGate ? { creditGate } : {}), ...(activeTaskModel ? { model: activeTaskModel } : {}) };
     try { window.localStorage.setItem(`wispaper-agent-session:${match[1]}`, JSON.stringify(session)); } catch { /* prototype storage */ }
-  }, [started, taskTitle, selectedSkill, messages, caseReplay]);
+  }, [started, taskTitle, selectedSkill, messages, caseReplay, creditGate, activeTaskModel]);
 
   const playCase = (title: string, casePrompt: string, summary: string, outcome: string, skill: string) => {
     caseFillTimersRef.current.forEach(window.clearTimeout);
@@ -1642,6 +1684,7 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
       const history: AgentRouteSession["messages"] = [{ role: "user", text: casePrompt }, { role: "agent", text: isZh ? `「${title}」已完成。${summary}\n\n交付结果：${finalOutput}` : `“${title}” is complete. ${summary}\n\nDeliverable: ${finalOutput}` }];
       setCaseSubmitting(false);
       setCaseReplay(replay);
+      setActiveTaskModel(replay.model);
       setTaskTitle(title);
       setMessages(history);
       setTodos(initialAgentTodos.map((todo) => ({ ...todo, status: "done" as AgentTodoStatus })));
@@ -1790,16 +1833,47 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
     } catch { return 0; }
   };
 
-  const submit = (text = prompt) => {
+  const showCreditGate = (kind: "agent" | "pro", value: string, skill = selectedSkill) => {
+    const title = value.length > 32 ? `${value.slice(0, 32)}…` : value;
+    if (!started) {
+      setTaskTitle(title);
+      setMessages([{ role: "user", text: value }]);
+      openAgentSessionRoute({ kind: "task", title, skill, messages: [{ role: "user", text: value }], creditGate: kind });
+    } else setMessages((items) => [...items, { role: "user", text: value }]);
+    setOnboardingOpen(false);
+    setStarted(true);
+    setRunning(false);
+    setCreditGate(kind);
+    setPrompt(value);
+  };
+
+  useEffect(() => {
+    const trigger = (event: Event) => {
+      const kind = (event as CustomEvent<{ kind: "agent" | "pro" }>).detail?.kind;
+      if (kind !== "agent" && kind !== "pro") return;
+      const value = kind === "pro" ? "围绕 AI Agent 测评生成文献综述，梳理代表性方法与评测证据。" : "围绕多模态 Agent 的长期记忆，提出可验证的研究方向。";
+      if (kind === "pro") { setSelectedSkill("文献综述"); setShortcutModel("Pro"); }
+      showCreditGate(kind, value, kind === "pro" ? "文献综述" : null);
+    };
+    window.addEventListener("wispaper:mock-agent-credit-gate", trigger);
+    return () => window.removeEventListener("wispaper:mock-agent-credit-gate", trigger);
+  }, [started, selectedSkill]);
+
+  const submit = (text = prompt, modelOverride?: "Lite") => {
     const value = text.trim();
     if (!value || running) return;
     if (selectedSkill === "搜索文献" && !caseReplay) {
       onOpenSearch(value);
       return;
     }
+    if (isAuthenticated && userCredits < 2000) { showCreditGate("agent", value); return; }
+    const usingPro = modelOverride !== "Lite" && ((["文献综述", "灵感发现", "论文评审", "组会 PPT"].includes(selectedSkill ?? "") && shortcutModel === "Pro") || (!selectedSkill && (activeTaskModel === "Pro" || selectedAgent === "primary" || selectedAgent === "deep")));
+    if (isAuthenticated && userCredits < 40000 && usingPro) { showCreditGate("pro", value); return; }
     const modifiesCanvas = /修改|更新|改写|调整/.test(value) && /科研画布|节点|卡片/.test(value);
     const canvasNodesRead = accessCanvasContext(modifiesCanvas ? "修改中" : "访问中");
-    const startingTask = !started;
+    const startingTask = !started || creditGate !== null;
+    setCreditGate(null);
+    setActiveTaskModel(modelOverride ?? (["文献综述", "灵感发现", "论文评审", "组会 PPT"].includes(selectedSkill ?? "") ? shortcutModel : usingPro ? "Pro" : "Lite"));
     if (startingTask) {
       const title = value.length > 32 ? `${value.slice(0, 32)}…` : value;
       setTaskTitle(title);
@@ -1813,7 +1887,7 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
     setSelectedSkill(null);
     setRunning(true);
     setActiveTab("common");
-    setMessages((items) => [...items, { role: "user", text: value }]);
+    setMessages((items) => items[items.length - 1]?.role === "user" && items[items.length - 1]?.text === value ? items : [...items, { role: "user", text: value }]);
     window.setTimeout(() => {
       setMessages((items) => [
         ...items,
@@ -1939,6 +2013,8 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
                     onSubmit={() => onboardingStep === "discipline" ? onboardingDiscipline.trim() && setOnboardingStep("need") : finishOnboarding()}
                     selectedAgent={selectedAgent}
                     onAgentChange={setSelectedAgent}
+                    shortcutModel={shortcutModel}
+                    onShortcutModelChange={setShortcutModel}
                     selectedSkill={null}
                     onSelectSkill={selectQuickTask}
                     onClearSkill={clearSkill}
@@ -1949,7 +2025,7 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
               </div>
             </footer>}
             </div>
-            <div className="fixed bottom-4 right-6 flex items-center gap-3 text-xs text-slate-500 opacity-50 transition-opacity hover:opacity-100 focus-within:opacity-100">
+            <div className="fixed bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap text-xs text-slate-500 opacity-50 transition-opacity hover:opacity-100 focus-within:opacity-100">
               <button type="button" onClick={closeOnboarding} className="hover:text-blue-600">{isZh ? "跳过" : "Skip"}</button>
               <span aria-hidden="true" className="h-3 w-px bg-slate-300" />
               <button type="button" onClick={() => { handleAgentLogin(); closeOnboarding(); }} className="hover:text-blue-600">{isZh ? "登录" : "Sign In"}</button>
@@ -1986,6 +2062,8 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
                   onSubmit={() => submit()}
                   selectedAgent={selectedAgent}
                   onAgentChange={setSelectedAgent}
+                  shortcutModel={shortcutModel}
+                  onShortcutModelChange={setShortcutModel}
                   selectedSkill={selectedSkill}
                   onSelectSkill={selectQuickTask}
                   onClearSkill={clearSkill}
@@ -2012,15 +2090,16 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
                 <h2 className="text-sm font-semibold text-slate-900">{isZh ? "案例" : "Cases"}</h2>
                 <div className="agent-launch-case-grid mt-3">
                   {visibleCases.map((item, index) => {
+                    const skill = item.skill ?? selectedShortcut?.title ?? activeCaseTab;
+                    const englishSample = launchShortcutEnglish[skill]?.samples[item.sampleIndex ?? index];
                     const englishItem = selectedShortcut
                       ? { title: launchShortcutEnglish[selectedShortcut.title]?.samples[index]?.title ?? item.title, field: launchShortcutEnglish[selectedShortcut.title]?.title ?? item.field, summary: launchShortcutEnglish[selectedShortcut.title]?.samples[index]?.prompt ?? item.summary, outcome: launchShortcutEnglish[selectedShortcut.title]?.samples[index]?.prompt ?? item.outcome, prompt: launchShortcutEnglish[selectedShortcut.title]?.samples[index]?.prompt ?? item.prompt }
-                      : defaultCaseStudyEnglish[index];
+                      : { title: englishSample?.title ?? item.title, field: launchShortcutEnglish[skill]?.title ?? item.field, summary: englishSample?.prompt ?? item.summary, outcome: englishSample?.prompt ?? item.outcome, prompt: englishSample?.prompt ?? item.prompt };
                     const title = isZh ? item.title : englishItem?.title ?? item.title;
                     const field = isZh ? item.field : englishItem?.field ?? item.field;
                     const summary = isZh ? item.summary : englishItem?.summary ?? item.summary;
                     const outcome = isZh ? item.outcome : englishItem?.outcome ?? item.outcome;
                     const casePrompt = isZh ? item.prompt : englishItem?.prompt ?? item.prompt;
-                    const skill = selectedShortcut?.title ?? activeCaseTask.title;
                     return (
                       <button
                         key={item.title}
@@ -2092,7 +2171,7 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
                         </span>
                         <span className="text-sm font-semibold">切问学术</span>
                         <span className="rounded-md border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-500">
-                          {caseReplay?.model ?? agentTiers.find((tier) => tier.id === selectedAgent)?.label}
+                          {caseReplay?.model ?? activeTaskModel ?? agentTiers.find((tier) => tier.id === selectedAgent)?.label}
                         </span>
                       </div>
                       <div className={`rounded-[18px] rounded-tl-md bg-slate-50 px-5 py-4 text-[15px] leading-7 text-slate-700 ${caseReplay ? "whitespace-pre-line" : ""}`}>
@@ -2129,6 +2208,7 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
                   正在制定研究计划并选择工具…
                 </div>
               )}
+              {creditGate && isAuthenticated && <AgentCreditGateCard kind={creditGate} credits={userCredits} isZh={isZh} onUpgrade={onUpgrade} onSearch={() => onOpenSearch(prompt || messages[messages.length - 1]?.text || "")} onUseLite={() => { setShortcutModel("Lite"); setSelectedAgent("fast"); submit(prompt || messages[messages.length - 1]?.text || "", "Lite"); }} />}
               {!isAuthenticated && <div ref={guestCardRef}><AgentLoginPrompt isZh={isZh} mode={loginCardMode} onLogin={openRedirectLogin} onComplete={handleAgentLogin} /></div>}
               <div ref={replayMessagesEndRef} />
             </div>
@@ -2142,12 +2222,14 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
                 onSubmit={() => submit()}
                 selectedAgent={selectedAgent}
                 onAgentChange={setSelectedAgent}
+                shortcutModel={shortcutModel}
+                onShortcutModelChange={setShortcutModel}
                 selectedSkill={selectedSkill}
                 onSelectSkill={selectQuickTask}
                 onClearSkill={clearSkill}
                 disabled={running}
                 compact
-                replayModel={caseReplay?.model}
+                replayModel={caseReplay?.model ?? activeTaskModel ?? undefined}
               />}
               <p className="mt-2 text-center text-[10px] text-slate-300">内容由 AI 生成，请仔细甄别</p>
             </div>

@@ -345,6 +345,11 @@ export default function App() {
       setInitialAskQuestion('');
       setScholarQAKey((value) => value + 1);
     }
+    if (view === 'academic-agent') {
+      setInitialAgentPrompt('');
+      setAgentKey((value) => value + 1);
+      if (window.location.pathname !== '/') window.history.pushState({ view: 'academic-agent' }, '', '/');
+    }
     setViewMode(view as any);
   };
 
@@ -657,7 +662,7 @@ export default function App() {
           ) : viewMode === "idea-discovery" ? (
             <IdeaDiscovery />
           ) : viewMode === "academic-agent" ? (
-            <AcademicAgent key={agentKey} initialPrompt={initialAgentPrompt} onLogin={() => setShowPaywallModal(true)} onOpenSearch={(query) => {
+            <AcademicAgent key={agentKey} initialPrompt={initialAgentPrompt} userCredits={mockUserCredits} onUpgrade={() => setShowPaywallModal(true)} onLogin={() => setShowPaywallModal(true)} onOpenSearch={(query) => {
               setViewMode("list");
               handleSearch(query);
             }} onOpenProjects={() => {
