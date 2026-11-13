@@ -37,6 +37,7 @@ import {
   PanelRight,
   Pause,
   Play,
+  Presentation,
   Plus,
   RotateCcw,
   Search,
@@ -253,6 +254,26 @@ const quickTaskSamplePrompts: Record<string, AgentSamplePrompt[]> = {
       credits: "9K",
     },
   ],
+  "组会 PPT": [
+    {
+      title: "Agent 测评进展汇报",
+      summary: "将近期论文、研究脉络和下一步计划整理为可编辑的组会演示文稿。",
+      prompt: "基于近三年 AI Agent 测评论文，制作一份包含研究背景、方法分类、代表工作和下周计划的组会 PPT。",
+      credits: "12K",
+    },
+    {
+      title: "肺癌免疫治疗文献汇报",
+      summary: "提炼临床证据、关键图表和待讨论问题，形成适合组会讲述的幻灯片。",
+      prompt: "整理非小细胞肺癌免疫治疗的近期文献，制作一份包含疗法进展、生物标志物和研究问题的组会 PPT。",
+      credits: "14K",
+    },
+    {
+      title: "量化因子实验周报",
+      summary: "把实验结果、失败案例和后续验证计划放进同一份汇报。",
+      prompt: "根据量化因子投资的实验记录，制作一份展示回测结果、失败案例与下一步验证计划的组会 PPT。",
+      credits: "10K",
+    },
+  ],
 };
 
 const launchShortcuts: LaunchShortcut[] = [
@@ -260,6 +281,7 @@ const launchShortcuts: LaunchShortcut[] = [
   { title: "文献综述", icon: BookOpen, samples: quickTaskSamplePrompts.文献综述 },
   { title: "灵感发现", icon: Sparkles, samples: quickTaskSamplePrompts.灵感发现 },
   { title: "论文评审", icon: GraduationCap, samples: quickTaskSamplePrompts.论文评审 },
+  { title: "组会 PPT", icon: Presentation, samples: quickTaskSamplePrompts["组会 PPT"] },
 ];
 
 const launchShortcutEnglish: Record<string, { title: string; samples: Array<{ title: string; prompt: string }> }> = {
@@ -293,6 +315,14 @@ const launchShortcutEnglish: Record<string, { title: string; samples: Array<{ ti
       { title: "Long-Context Model Paper", prompt: "Review a paper on long-context models as a top-tier conference reviewer, focusing on novelty, evaluation coverage, and the boundaries of its claims." },
       { title: "Lung Cancer Diagnosis Paper", prompt: "Review a paper on an assistive diagnostic model for non-small cell lung cancer, checking data splits, external validation, clinical baselines, and statistical evidence." },
       { title: "Asset-Pricing Factor Paper", prompt: "Review an asset-pricing factor paper, focusing on factor-mining bias, transaction costs, out-of-sample performance, and economic interpretation." },
+    ],
+  },
+  "组会 PPT": {
+    title: "Lab Meeting Slides",
+    samples: [
+      { title: "Agent Evaluation Update", prompt: "Create editable lab meeting slides on AI Agent evaluation, covering recent papers, method categories, representative work, and next week's plan." },
+      { title: "Lung Cancer Immunotherapy", prompt: "Create lab meeting slides on recent non-small-cell lung cancer immunotherapy research, including treatment progress, biomarkers, and open questions." },
+      { title: "Factor Investing Weekly Update", prompt: "Turn my factor-investing experiment notes into lab meeting slides with backtest results, failed cases, and next validation steps." },
     ],
   },
 };
@@ -516,7 +546,7 @@ function AgentComposer({
     ?? launchShortcuts.find((shortcut) => shortcut.title === selectedSkill);
   const SelectedSkillIcon = selectedTask?.icon;
   const isPaperSearch = selectedSkill === "搜索文献";
-  const usesLaunchOptions = ["文献综述", "灵感发现", "论文评审"].includes(selectedSkill ?? "");
+  const usesLaunchOptions = ["文献综述", "灵感发现", "论文评审", "组会 PPT"].includes(selectedSkill ?? "");
   const projectOptions = ["Default Project", "长上下文模型位置偏差研究", "多模态 Agent 评测", "非小细胞肺癌免疫治疗"];
 
   return (
@@ -735,35 +765,54 @@ function AgentLaunchCaseArtwork({ title, task, index, isZh }: { title: string; t
     { bg: "#edf3f0", ink: "#3d6b62", soft: "#d8e9e1", line: "#acc9bd" },
     { bg: "#f7f2e9", ink: "#927243", soft: "#ede0c7", line: "#d5bf99" },
   ][index % 3];
-  const heading = title.length > (isZh ? 15 : 29) ? `${title.slice(0, isZh ? 14 : 28)}…` : title;
-  const isSearch = task === "搜索文献";
-  const isReview = task === "文献综述";
-  const isPeerReview = task === "论文评审";
-  const eyebrow = isSearch ? "PAPER SEARCH" : isReview ? "LITERATURE REVIEW" : isPeerReview ? "PEER REVIEW" : "RESEARCH IDEAS";
-  const steps = isSearch
-    ? (isZh ? ["相关论文", "方法脉络", "研究线索"] : ["Papers", "Methods", "Insights"])
-    : isReview
-      ? (isZh ? ["研究问题", "方法分类", "证据对照"] : ["Questions", "Taxonomy", "Evidence"])
-      : isPeerReview
-        ? (isZh ? ["研究贡献", "实验设计", "修改建议"] : ["Contribution", "Evidence", "Revisions"])
-        : (isZh ? ["发现问题", "形成假设", "设计验证"] : ["Discover", "Hypothesize", "Validate"]);
+  const isSlides = task === "组会 PPT";
+  const suffix = isSlides ? ".pptx" : ".md";
+  const outputName = task === "文献综述" ? (isZh ? "综述" : " Review")
+    : task === "论文评审" ? (isZh ? "审稿意见" : " Review")
+      : task === "搜索文献" ? (isZh ? "文献清单" : " Papers")
+        : isSlides ? (isZh ? "组会汇报" : " Lab Meeting")
+          : (isZh ? "研究方向" : " Ideas");
+  const fileName = `${title.replace(/\s+/g, " ").slice(0, isZh ? 5 : 11)}${outputName}${suffix}`;
+  const sourceLabels = task === "组会 PPT"
+    ? (isZh ? ["代表论文", "实验记录", "下周计划"] : ["Key papers", "Results", "Next steps"])
+    : task === "灵感发现"
+      ? (isZh ? ["论文证据", "研究空白", "验证方案"] : ["Evidence", "Research gap", "Validation"])
+      : (isZh ? ["论文 01", "论文 02", "论文 03"] : ["Paper 01", "Paper 02", "Paper 03"]);
+  const previewLines = task === "文献综述"
+    ? (isZh ? ["摘要与研究范围", "方法分类与脉络", "证据对照与引用"] : ["Scope and abstract", "Method taxonomy", "Evidence and citations"])
+    : isSlides
+      ? (isZh ? ["01 研究背景", "02 方法与证据", "03 下周计划"] : ["01 Background", "02 Evidence", "03 Next steps"])
+      : task === "论文评审"
+        ? (isZh ? ["主要贡献", "关键问题", "修改建议"] : ["Strengths", "Concerns", "Suggestions"])
+        : task === "搜索文献"
+          ? (isZh ? ["检索结果", "方法比较", "关键结论"] : ["Search results", "Method map", "Key findings"])
+          : (isZh ? ["候选方向", "创新点", "验证路径"] : ["Directions", "Novelty", "Validation"]);
   return <svg viewBox="0 0 600 360" className="case-artwork" aria-hidden="true" focusable="false">
     <rect width="600" height="360" fill={colors.bg} />
-    <text x="30" y="37" fill={colors.ink} fontSize="12" letterSpacing="2" opacity=".75">WISPAPER / {eyebrow}</text>
+    <text x="30" y="37" fill={colors.ink} fontSize="12" letterSpacing="2" opacity=".75">WISPAPER / {isSlides ? "PRESENTATION" : "AGENT DELIVERABLE"}</text>
     <path d="M30 53h540" stroke={colors.line} strokeWidth="1" />
-    {isSearch ? <>
-      <g className="case-art-back"><rect x="75" y="83" width="435" height="236" rx="13" fill="#fff" stroke={colors.soft} /><rect x="101" y="103" width="375" height="35" rx="8" fill={colors.bg} /><circle cx="125" cy="120" r="8" fill="none" stroke={colors.ink} strokeWidth="3" /><path d="m131 126 9 9" stroke={colors.ink} strokeWidth="3" strokeLinecap="round" /><text x="153" y="126" fill={colors.ink} fontSize="16">{heading}</text></g>
-      <g className="case-art-front">{steps.map((step, stepIndex) => <g key={step}><rect x={112 + stepIndex * 10} y={159 + stepIndex * 50} width={354 - stepIndex * 20} height="42" rx="8" fill={stepIndex === 0 ? colors.soft : "#f7f9fc"} /><circle cx={133 + stepIndex * 10} cy={180 + stepIndex * 50} r="6" fill={colors.ink} opacity={1 - stepIndex * .22} /><text x={150 + stepIndex * 10} y={185 + stepIndex * 50} fill="#53677b" fontSize="15">{step}</text><path d={`M${310 + stepIndex * 10} ${180 + stepIndex * 50}h110`} stroke={colors.line} strokeWidth="5" strokeLinecap="round" /></g>)}</g>
-      <g className="case-art-note"><rect x="388" y="286" width="150" height="39" rx="8" fill={colors.ink} /><text x="463" y="311" textAnchor="middle" fill="#fff" fontSize="13">{isZh ? "证据已整理" : "Evidence ready"}</text></g>
-    </> : isPeerReview ? <>
-      <g className="case-art-back" transform="rotate(-4 240 190)"><rect x="78" y="73" width="304" height="256" rx="9" fill="#fff" stroke={colors.soft} /><text x="104" y="105" fill={colors.ink} fontSize="11" letterSpacing="1.5">RESEARCH MANUSCRIPT</text><text x="104" y="142" fill="#344253" fontSize="17">{heading}</text>{[0, 1, 2, 3, 4].map((line) => <path key={line} d={`M104 ${170 + line * 27}h${line % 2 ? 188 : 242}`} stroke="#e9edf2" strokeWidth="6" strokeLinecap="round" />)}<path d="M104 224h216" stroke={colors.soft} strokeWidth="16" /></g>
-      <g className="case-art-front">{steps.slice(0, 2).map((step, stepIndex) => <g key={step}><rect x="352" y={128 + stepIndex * 111} width="185" height="76" rx="11" fill="#fff" stroke={colors.line} /><circle cx="378" cy={153 + stepIndex * 111} r="11" fill={colors.soft} /><text x="378" y={158 + stepIndex * 111} textAnchor="middle" fill={colors.ink} fontSize="13">{stepIndex + 1}</text><text x="400" y={159 + stepIndex * 111} fill={colors.ink} fontSize="15">{step}</text><path d={`M375 ${181 + stepIndex * 111}h135`} stroke="#e9edf2" strokeWidth="5" strokeLinecap="round" /></g>)}</g>
-    </> : <>
-      <g className="case-art-back"><rect x="73" y="88" width="174" height="78" rx="12" fill="#fff" stroke={colors.soft} /><circle cx="96" cy="112" r="6" fill={colors.line} /><text x="111" y="119" fill={colors.ink} fontSize="17">{steps[0]}</text><path d="M96 142h112" stroke={colors.soft} strokeWidth="5" strokeLinecap="round" /><rect x="360" y="88" width="174" height="78" rx="12" fill="#fff" stroke={colors.soft} /><circle cx="383" cy="112" r="6" fill={colors.line} /><text x="398" y="119" fill={colors.ink} fontSize="17">{steps[1]}</text><path d="M383 142h112" stroke={colors.soft} strokeWidth="5" strokeLinecap="round" /></g>
-      <path d="M300 190C260 137 231 133 211 133M300 190C340 137 369 133 389 133M300 190v76" fill="none" stroke={colors.line} strokeWidth="2" />
-      <g className="case-art-front"><rect x="165" y="173" width="270" height="87" rx="15" fill={colors.ink} /><text x="300" y="198" textAnchor="middle" fill="#fff" opacity=".68" fontSize="11" letterSpacing="2">{isReview ? "SURVEY FRAMEWORK" : "RESEARCH QUESTION"}</text><text x="300" y="230" textAnchor="middle" fill="#fff" fontSize="19" fontWeight="600">{heading}</text></g>
-      <g className="case-art-note"><rect x="218" y="281" width="165" height="43" rx="9" fill="#fff" stroke={colors.soft} /><text x="300" y="308" textAnchor="middle" fill={colors.ink} fontSize="16">↗ {steps[2]}</text></g>
-    </>}
+    <g className="case-art-diagram" fill="none" stroke={colors.line} strokeWidth="2.5" strokeLinecap="round">
+      {sourceLabels.map((_, itemIndex) => <path key={itemIndex} d={`M326 ${130 + itemIndex * 68} C352 ${130 + itemIndex * 68}, 342 ${112 + itemIndex * 76}, 374 ${112 + itemIndex * 76}`} />)}
+    </g>
+    <g className="case-art-front">
+      <rect x="66" y="74" width="260" height="247" rx="15" fill="#fff" stroke={colors.soft} strokeWidth="2" />
+      <path d="M91 94h22l11 11v25H91z" fill={colors.soft} stroke={colors.ink} strokeWidth="1.5" strokeLinejoin="round" /><path d="M113 94v11h11" fill="none" stroke={colors.ink} strokeWidth="1.5" />
+      <text x="137" y="107" fill={colors.ink} fontSize="14" fontWeight="600">{fileName}</text>
+      <text x="92" y="154" fill="#8a9bad" fontSize="12" letterSpacing="1.5">{isSlides ? "SLIDE DECK" : "RESEARCH FILE"}</text>
+      {previewLines.map((line, lineIndex) => <g key={line}>
+        <circle cx="99" cy={181 + lineIndex * 41} r="4" fill={colors.ink} opacity={1 - lineIndex * .2} />
+        <text x="112" y={186 + lineIndex * 41} fill="#4e6175" fontSize="15">{line}</text>
+        <path d={`M112 ${198 + lineIndex * 41}h${lineIndex === 2 ? 113 : 174}`} stroke={colors.soft} strokeWidth="5" strokeLinecap="round" />
+      </g>)}
+    </g>
+    <g className="case-art-back">
+      {sourceLabels.map((label, itemIndex) => <g key={label}>
+        <rect x="374" y={83 + itemIndex * 76} width="173" height="59" rx="11" fill="#fff" stroke={colors.soft} strokeWidth="2" />
+        <rect x="389" y={98 + itemIndex * 76} width="26" height="29" rx="4" fill={colors.soft} />
+        <path d={`M396 ${106 + itemIndex * 76}h12m-12 6h12m-12 6h8`} stroke={colors.ink} strokeWidth="2" strokeLinecap="round" />
+        <text x="425" y={118 + itemIndex * 76} fill={colors.ink} fontSize="14" fontWeight="500">{label}</text>
+      </g>)}
+    </g>
   </svg>;
 }
 
@@ -1586,8 +1635,8 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
     caseFillTimersRef.current.push(window.setTimeout(() => setCaseSubmitting(true), typingMs + 180));
     caseFillTimersRef.current.push(window.setTimeout(() => {
       const resultBySkill: Record<string, string> = isZh
-        ? { "搜索文献": "已整理代表性论文、核心方法、数据集与评测指标。", "文献综述": "已形成综述提纲、研究脉络和可追溯的证据表。", "灵感发现": "已提出三个可检验的研究方向，并标出优先验证路径。", "论文评审": "已汇总论文的主要优点、关键问题与修改建议。" }
-        : { "搜索文献": "Representative papers, methods, datasets, and evaluation metrics are organized.", "文献综述": "A review outline, research trajectory, and traceable evidence table are ready.", "灵感发现": "Three testable research directions and validation priorities are ready.", "论文评审": "The paper's strengths, critical issues, and revision suggestions are summarized." };
+        ? { "搜索文献": "已整理代表性论文、核心方法、数据集与评测指标。", "文献综述": "已形成综述提纲、研究脉络和可追溯的证据表。", "灵感发现": "已提出三个可检验的研究方向，并标出优先验证路径。", "论文评审": "已汇总论文的主要优点、关键问题与修改建议。", "组会 PPT": "已生成可编辑的组会演示文稿，并关联论文与实验记录。" }
+        : { "搜索文献": "Representative papers, methods, datasets, and evaluation metrics are organized.", "文献综述": "A review outline, research trajectory, and traceable evidence table are ready.", "灵感发现": "Three testable research directions and validation priorities are ready.", "论文评审": "The paper's strengths, critical issues, and revision suggestions are summarized.", "组会 PPT": "An editable slide deck is ready, linked to papers and experiment notes." };
       const finalOutput = resultBySkill[skill] ?? outcome;
       const replay = { title, summary, outcome, model: skill === "搜索文献" ? "Lite" as const : "Pro" as const };
       const history: AgentRouteSession["messages"] = [{ role: "user", text: casePrompt }, { role: "agent", text: isZh ? `「${title}」已完成。${summary}\n\n交付结果：${finalOutput}` : `“${title}” is complete. ${summary}\n\nDeliverable: ${finalOutput}` }];
@@ -1979,10 +2028,10 @@ export function AcademicAgent({ onOpenProjects, onOpenSearch, onLogin, initialPr
                         onClick={() => playCase(title, casePrompt, summary, outcome, skill)}
                         className="wh-visual-case"
                         style={{ '--case-order': index } as React.CSSProperties}
-                        aria-label={`${isZh ? '播放案例回放' : 'Replay case'}：${title}`}
+                        aria-label={`${isZh ? '播放案例回放' : 'Replay case'}：${casePrompt}`}
                       >
                         <span className="wh-case-visual"><span className="wh-case-art"><AgentLaunchCaseArtwork title={title} task={skill} index={index} isZh={isZh} /></span><span className="wh-case-preview-action">{isZh ? '播放回放' : 'Replay'}<ArrowUpRight size={14} /></span></span>
-                        <span className="wh-case-caption"><span><strong>{title}</strong><small>{field} · {item.credits}</small></span><span className="wh-case-open"><ArrowUpRight size={18} /></span></span>
+                        <span className="wh-case-caption"><span><strong title={casePrompt}>{casePrompt}</strong><small>{field} · {item.credits}</small></span><span className="wh-case-open"><ArrowUpRight size={18} /></span></span>
                       </button>
                     );
                   })}
