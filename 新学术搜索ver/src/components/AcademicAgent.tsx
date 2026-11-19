@@ -1,5 +1,6 @@
 import { AgentSettingsLauncher } from "./agent-memory/AgentMemorySettings";
 import React, { useEffect, useState } from "react";
+import { htmlExamplePrompt } from "./browser-use/html/artifact";
 import { BrowserResearch } from "./browser-use/BrowserResearch";
 import {
   ArrowUp,
@@ -1353,6 +1354,10 @@ export function AcademicAgent({ onOpenProjects, initialPrompt = "", initialSkill
                   onClearSkill={clearSkill}
                 />
               </div>
+              <button type="button" onClick={() => submit(htmlExamplePrompt, "HTML 交互报告")}
+                className="mx-auto mt-3 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:border-blue-200 hover:text-blue-700">
+                <Code2 className="h-4 w-4" />试用 HTML 交互报告<ChevronRight className="h-3.5 w-3.5" />
+              </button>
               {projectContext && (
                 <div className="mx-auto mt-3 inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700">
                   <FolderKanban className="h-3.5 w-3.5" />

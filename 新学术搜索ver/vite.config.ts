@@ -55,6 +55,7 @@
     },
     build: {
       target: 'esnext',
+      rollupOptions: { input: { app: 'index.html', htmlPreview: 'html-preview.html' } },
       outDir: 'build',
     },
     server: {

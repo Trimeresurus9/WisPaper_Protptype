@@ -1,0 +1,61 @@
+.ha-preview, .ha-dialog, .ha-shared {
+  color: #28384a;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+}
+.ha-preview { display: flex; flex: 1; flex-direction: column; min-height: 0; background: white; }
+.ha-preview button, .ha-dialog button, .ha-result button { font-family: inherit; cursor: pointer; }
+.ha-filebar, .ha-controls, .ha-runtime { display: flex; align-items: center; padding: 10px 14px; gap: 8px; flex-shrink: 0; }
+.ha-filebar { min-height: 49px; }
+.ha-filebar strong, .ha-result-card strong, .ha-shared header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ha-filebar strong { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; }
+.ha-file-type { flex-shrink: 0; color: #468b81; }
+.ha-icon, .ha-restart, .ha-dialog-footer button, .ha-dialog-footer a { border: 0; background: transparent; color: #526478; }
+.ha-icon { display: grid; place-items: center; border-radius: 7px; height: 30px; width: 30px; }
+.ha-icon:hover, .ha-restart:hover { background: #eef3f8; }
+.ha-share, .ha-restart, .ha-dialog-footer a, .ha-dialog-footer button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; }
+.ha-share { border: 0; background: #246cc2; color: #fff; border-radius: 7px; padding: 7px 12px; white-space: nowrap; cursor: pointer; }
+.ha-share:hover { background: #175aa8; }
+.ha-share:disabled { opacity: .55; cursor: wait; }
+.ha-controls { justify-content: space-between; border-block: 1px solid #e7edf2; padding-block: 7px; }
+.ha-segments { display: flex; gap: 2px; padding: 3px; background: #eff3f7; border-radius: 8px; }
+.ha-segments button { display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; border: 0; background: transparent; border-radius: 5px; color: #617285; font-size: 12px; }
+.ha-segments button[aria-pressed=true] { background: white; color: #21496b; box-shadow: 0 1px 3px #23344821; }
+.ha-restart { border-radius: 6px; padding: 6px; }
+.ha-stage, .ha-source { flex: 1; min-height: 0; }
+.ha-stage { display: flex; }
+.ha-stage[hidden] { display: none; }
+.ha-frame { display: block; width: 100%; height: 100%; border: 0; background: white; }
+.ha-source { margin: 0; overflow: auto; background: #f7f9fc; color: #244c68; padding: 16px; font: 12px/1.75 ui-monospace, monospace; tab-size: 2; }
+.ha-runtime { border-top: 1px solid #e4eaf0; color: #39685e; font-size: 11px; padding-block: 7px; }
+.ha-runtime span { margin-left: auto; color: #647689; }
+.ha-result-card { display: flex; align-items: center; gap: 12px; width: 100%; max-width: 510px; margin: 13px 0; padding: 14px; text-align: left; border: 1px solid #dfe7eb; border-radius: 11px; background: white; color: #344a5b; }
+.ha-result-card:hover { border-color: #8db2bf; background: #f8fbfb; }
+.ha-file-icon { padding: 10px; background: #e8f3ef; border-radius: 9px; color: #317969; }
+.ha-result-card > span:nth-child(2) { flex: 1; min-width: 0; }
+.ha-result-card strong, .ha-result-card small { display: block; }
+.ha-result-card strong { font-size: 13px; }
+.ha-result-card small { color: #607381; font-size: 11px; }
+.ha-open-label { display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0; color: #446c85; font-size: 12px; }
+.ha-overlay { position: fixed; inset: 0; z-index: 130; background: #17283b55; }
+.ha-dialog { box-sizing: border-box; position: fixed; z-index: 131; left: 50%; top: 50%; transform: translate(-50%,-50%); width: min(430px,calc(100% - 28px)); padding: 25px; border: 1px solid #dfe7ef; border-radius: 16px; background: #fff; box-shadow: 0 20px 70px #17283b33; }
+.ha-close { position: absolute; top: 13px; right: 13px; }
+.ha-dialog h2 { font-size: 19px; margin: 0 28px 7px 0; font-weight: 650; }
+.ha-dialog p { font-size: 13px; color: #607185; line-height: 1.65; margin: 0; }
+.ha-share-file { display: flex; align-items: center; gap: 9px; color: #315d56; padding: 13px; background: #eff6f4; border-radius: 8px; margin: 16px 0; font-size: 13px; overflow-wrap: anywhere; }
+.ha-dialog label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 600; }
+.ha-copy-row { display: flex; gap: 7px; }
+.ha-copy-row input { min-width: 0; flex: 1; border: 1px solid #d7e1ea; border-radius: 7px; padding: 8px; font: 12px ui-monospace, monospace; }
+.ha-message:not(:empty), .ha-dialog .ha-local-note { font-size: 12px; margin-top: 10px; }
+.ha-dialog-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 18px; }
+.ha-dialog-footer button, .ha-dialog-footer a { color: #2869a8; padding: 4px 0; text-decoration: none; }
+.ha-shared { display: flex; flex-direction: column; height: 100vh; height: 100dvh; background: #f3f6fa; }
+.ha-shared header { padding: 12px clamp(12px,4vw,44px); display: flex; align-items: center; gap: 10px; background: #fff; border-bottom: 1px solid #e1e7ed; }
+.ha-shared header img { height: 24px; width: 24px; object-fit: contain; }
+.ha-shared header b { font-size: 15px; }
+.ha-shared header i { height: 16px; border-left: 1px solid #dce3e9; }
+.ha-shared header strong { font-size: 13px; font-weight: 500; }
+.ha-shared header span { margin-left: auto; color: #687a87; white-space: nowrap; font-size: 11px; }
+.ha-shared .ha-frame { flex: 1; min-height: 0; }
+.ha-empty { margin: auto; padding: 20px; color: #536778; text-align: center; }
+.ha-empty h1 { font-size: 20px; }.ha-empty p { font-size: 14px; }
+@media (max-width: 440px) { .ha-filebar, .ha-controls, .ha-runtime { padding-inline: 7px; } .ha-open-label { font-size: 11px; } }

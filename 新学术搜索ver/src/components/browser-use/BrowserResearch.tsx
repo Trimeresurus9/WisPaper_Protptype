@@ -5,6 +5,8 @@ import { TaskMemoryPanel, useTaskMemory } from "../agent-memory/TaskMemoryPanel"
 import React, { useEffect, useRef, useState } from "react";
 import { Sparkles, MoreHorizontal, PanelRight, Share2, Lightbulb, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BookOpen, Bot, Check, CheckCircle2, ChevronDown, ChevronRight, Circle, ExternalLink, FileText, FolderOpen, Globe2, Hand, Link2, LoaderCircle, LockKeyhole, MousePointer2, Pause, Play, Plus, RotateCcw, Search, ShieldCheck, Square, X } from "lucide-react";
 import "./browser-research.css";
+import { HtmlResult } from "./html/HtmlPreview";
+import { htmlExamplePrompt, makeHtmlArtifact, type HtmlArtifact } from "./html/artifact";
 import { AgentLoginCard } from "../AgentLoginCard";
 import { AgentResponse, type ResponseStatus } from "./AgentResponse";
 import "./agent-workspace.css";
@@ -28,7 +30,12 @@ const phaseLabels: Record<Phase, string> = {ready:"等待开始", running:"正�
 const defaultPrompt = "读取这篇论文，整理论文信息、PDF 和官方代码，保存前让我确认。";
 const storageKey = "wispaper-browser-research-demo-materials";
 
-type ChatMessage = {role: "user" | "agent"; text: string; status?: ResponseStatus};
+type ChatMessage = {role: "user" | "agent"; text: string; status?: ResponseStatus; file?: HtmlArtifact};
+
+function agentReply(task: string, skill?: string): ChatMessage {
+  const file = makeHtmlArtifact(task, skill);
+  return { role: "agent", text: task, status: file ? "done" : "running", file };
+}
 
 type CreditState = "ok" | "low" | "empty";
 type CaseExperience = { item: AgentCase; step: number; view: 'result' | 'process'; onView: (view: 'result' | 'process') => void; onStep: (step: number) => void; onStartOwn: () => void };
@@ -48,18 +55,29 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
   const pageScrollRef = useRef<HTMLDivElement>(null);
   const browserDemo = new URLSearchParams(window.location.search).get("browser") === "demo";
   const [tabsCreated, setTabsCreated] = useState(false);
-  const [workbench, setWorkbench] = useState<WorkbenchView>("common");
-  const [activeDocument, setActiveDocument] = useState<string>();
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => {
+    if (!initialTask) return [];
+    const user: ChatMessage = { role: "user", text: initialTask };
+    if (guestMode || creditState === "empty") return [user];
+    return [user, caseExperience ? { role: "agent", text: initialTask, status: "done" } : agentReply(initialTask, initialSkill)];
+  });
+  const [workbench, setWorkbench] = useState<WorkbenchView>(chatMessages[1]?.file ? "files" : "common");
+  const [activeDocument, setActiveDocument] = useState<string | undefined>(chatMessages[1]?.file ? "html-1" : undefined);
+  const htmlFiles = chatMessages.flatMap((message, i) => message.file ? [{ id: `html-${i}`, file: message.file }] : []);
+  const openHtml = (id: string) => {
+    setActiveDocument(id);
+    setWorkbench("files");
+    setPanelOpen(true);
+  };
   const chatScroll = useRef<HTMLDivElement>(null);
   const guideTitle = useRef<HTMLSpanElement>(null);
   const [panelOpen, setPanelOpen] = useState(!guestMode);
   const [attached, setAttached] = useState(false);
   const [composerMenu, setComposerMenu] = useState(false);
-  const [activeSkill, setActiveSkill] = useState(initialSkill);
+  const [activeSkill, setActiveSkill] = useState(chatMessages[1]?.file ? "HTML 交互报告" : initialSkill);
   const [lowCreditDismissed, setLowCreditDismissed] = useState(false);
   // Fixed prototype usage records; not a retention rate or a real wallet deduction.
   const [retentionCredits, setRetentionCredits] = useState(12);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialTask ? guestMode || creditState === "empty" ? [{role:"user", text:initialTask}] : [{role:"user", text:initialTask},{role:"agent",text:initialTask,status:caseExperience ? "done" : "running"}] : []);
   const responseRunning = chatMessages.some(message => message.status === "running");
   const latestResponse = chatMessages[chatMessages.length - 1];
   const responsePending = latestResponse?.status === "running" || latestResponse?.status === "stopped";
@@ -69,7 +87,8 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
     setChatMessages(items => items.map((message, i) => i === index ? {...message, status} : message));
   };
   const title = initialTask || '从“NLP与多模态学习探索”生成可执行的研究计划';
-  const selectSkill = (skill: string) => {if (guestMode) return; if(caseExperience) {setNotice('当前为已完成案例，可以查看成果，或开始自己的研究任务。');return;}setActiveSkill(skill);setPrompt(`请帮我进行${skill}，结合当前研究目标与已有材料。`);};
+  const selectSkill = (skill: string) => {if (guestMode) return; if(caseExperience) {setNotice('当前为已完成案例，可以查看成果，或开始自己的研究任务。');return;}setActiveSkill(skill);if (skill === "HTML 交互报告") setAttached(false);
+    setPrompt(skill === "HTML 交互报告" ? htmlExamplePrompt : `请帮我进行${skill}，结合当前研究目标与已有材料。`);};
   const selectBrowserUse = () => { if (guestMode) return; if (caseExperience) {setNotice('案例中的工具记录已保存，无需执行新任务。');return;} if (busy) return; setActiveSkill("网页执行"); setAttached(false); setComposerMenu(false); openBrowser(); };
   const openBrowser = () => {setClientTab(false);setWorkbench("browser");setPanelOpen(true);setFollowPage(true);};
 
@@ -269,7 +288,9 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
         await start(); return;
       }
       if (browserBusy) stop();
-      setChatMessages(items=>[...items,{role:"user",text:query},{role:"agent",text:query,status:"running"}]);
+      const reply = agentReply(query, activeSkill);
+      if (reply.file) openHtml(`html-${chatMessages.length + 1}`);
+      setChatMessages(items => [...items, { role: "user", text: query }, reply]);
       setPrompt("");
     } finally { submissionRef.current = false; }
   };
@@ -294,7 +315,7 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
           {projectContext && <div className="aw-project-context"><FolderOpen size={15}/><span>当前项目</span><strong>{projectContext.title}</strong></div>}
           {!guestMode && creditState === "empty" && <div className="aw-credit-notice is-empty" role="status"><strong>任务已保留，补充积分后即可启动</strong><p>当前余额为 0 Credits。你的任务内容和项目上下文不会丢失。</p><div><button onClick={onRecharge}>补充积分</button><button className="secondary" onClick={onUpgrade}>查看会员方案</button></div></div>}
           {!guestMode && creditState === "low" && !lowCreditDismissed && <div className="aw-credit-notice" role="status"><strong>当前余额较低</strong><p>剩余 {userCredits.toLocaleString()} Credits，本次任务仍可继续。建议提前补充积分，避免后续步骤中断。</p><div><button onClick={onRecharge}>补充积分</button><button className="secondary" onClick={()=>setLowCreditDismissed(true)}>知道了</button></div></div>}
-          {chatMessages.map((message,index)=><div key={index} className={message.role === "user" ? "br-user-message" : "aw-chat-answer"}>{message.role === "agent" && <div className="br-assistant-label"><span className="br-agent-icon"><Bot size={16}/></span><strong>WisPaper</strong></div>}{message.role === "agent" && message.status ? <AgentResponse task={message.text} status={message.status} onStatusChange={status=>updateResponseStatus(index,status)} canReplay={!caseItem && index === chatMessages.length - 1 && !submitted && !sandbox.preparing} casePreview={caseExperience ? {item:caseExperience.item,step:caseExperience.step,view:caseExperience.view,onOpenResult:openCaseResult} : undefined}/> : <p>{message.text}</p>}</div>)}
+          {chatMessages.map((message,index)=><div key={index} className={message.role === "user" ? "br-user-message" : "aw-chat-answer"}>{message.role === "agent" && <div className="br-assistant-label"><span className="br-agent-icon"><Bot size={16}/></span><strong>WisPaper</strong></div>}{message.file ? <HtmlResult file={message.file} onOpen={() => openHtml(`html-${index}`)}/> : message.role === "agent" && message.status ? <AgentResponse task={message.text} status={message.status} onStatusChange={status=>updateResponseStatus(index,status)} canReplay={!caseItem && index === chatMessages.length - 1 && !submitted && !sandbox.preparing} casePreview={caseExperience ? {item:caseExperience.item,step:caseExperience.step,view:caseExperience.view,onOpenResult:openCaseResult} : undefined}/> : <p>{message.text}</p>}</div>)}
           {guestLogin && <div className="agl-assistant"><div className="br-assistant-label"><span className="br-agent-icon"><Bot size={16}/></span><strong>WisPaper</strong></div><AgentLoginCard onComplete={guestLogin.onComplete} onEdit={guestLogin.onEdit}/></div>}
           {submitted && <>
             <div className="br-user-message">{submitted}<div><Globe2 size={12}/>{selected.length} 个网页 · {permission === "read" ? "仅阅读" : "阅读与操作"}</div></div>
@@ -332,7 +353,7 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
       {workbench === "memory" && !caseItem && <TaskMemoryPanel memory={taskMemory} projectContext={projectContext}/>}
       {workbench === "common" && <CommonFunctions onSelect={title => title === "Ask AI" ? setWorkbench("ask-ai") : selectSkill(title)} onBrowser={selectBrowserUse}/>}
       {workbench === "ask-ai" && <AskAIPanel />}
-      {workbench !== "ask-ai" && workbench !== "memory" && workbench !== "common" && workbench !== "browser" && <AuxiliaryWorkbench view={workbench} savedProject={savedProject} onSelect={selectSkill} documents={caseDocuments} activeDocument={activeDocument} onOpenDocument={setActiveDocument}/>}
+      {workbench !== "ask-ai" && workbench !== "memory" && workbench !== "common" && workbench !== "browser" && <AuxiliaryWorkbench view={workbench} savedProject={savedProject} onSelect={selectSkill} documents={caseDocuments} htmlFiles={htmlFiles} activeDocument={activeDocument} onOpenDocument={setActiveDocument}/>}
       <section className="br-browser" aria-label="网页执行预览" hidden={workbench !== "browser"}>
         <div className="aw-browser-intro"><span><Globe2 size={16}/>{clientTab ? "客户端网页标签页" : "网页执行预览"}</span><button disabled={busy || !!caseItem} onClick={openPicker}>{tabsCreated ? "管理任务标签页" : "新建 Agent 标签页"}<Plus size={13}/></button></div>
         {!attached && <div className="aw-browser-connect"><p>在客户端新建标签页，交给 Agent 执行网页任务。</p><small>右侧与任务共享模拟页面状态，控制浏览器后可直接操作。此原型不连接真实浏览器。</small></div>}
@@ -353,7 +374,7 @@ export function BrowserResearch({onBack, initialTask = "", initialSkill = "灵�
           {phase === "error" ? <div className="br-page-empty"><Globe2 size={34}/><h2>网页未能加载</h2><p>模拟网络连接中断，已完成的结果不会丢失。</p><button className="br-primary" onClick={async () => {if (!(await sandbox.ensureReady())) return; setRecovered(true); setPhase("running");}}>重新加载并继续</button></div> : displayedPage === "review" ? <div className="br-page-empty"><LockKeyhole size={34}/><h2>{loggedIn ? "机构访问已就绪" : "通过机构访问全文"}</h2><p>{loggedIn ? "现在可以继续获取文献材料。" : "本示例用于体验登录中断与恢复流程。"}</p>{!loggedIn && <button className="br-primary" disabled={phase !== "login" && !canOperate} onClick={async () => {if (!(await sandbox.ensureReady())) return; setLoggedIn(true); if (phase === "login") {setPhase("running"); setActivity(items => [...items, "用户完成演示登录，继续读取"]);} else setNotice("演示登录已完成");}}>模拟登录完成{phase === "login" ? "并继续" : ""}</button>}<small>无需输入真实凭据</small></div> : displayedPage === "code" ? <div className="br-code-page"><div className="br-code-top"><span className="br-favicon code">⌘</span><strong>GitHub</strong><span>示例预览</span></div><p className="br-repo-name">tensorflow <span>/</span> <strong>tensor2tensor</strong><small>Public</small></p><div className="br-repo-nav">〈〉 Code <span>Issues</span><span>Pull requests</span></div><div className="br-repo-file"><FolderOpen size={15}/> tensor2tensor <small>模型与训练工具</small></div><div className="br-repo-file"><FileText size={15}/> README.md <small>项目说明</small></div><article><span className="br-eyebrow">README.md</span><h2>Tensor2Tensor</h2><p>A library of deep learning models and datasets designed to make deep learning more accessible and accelerate ML research.</p><h3>Transformer</h3><p>Implementation resources for “Attention Is All You Need”.</p><div className="br-code-snippet">tensor2tensor/models/transformer.py</div><p className="br-page-note">该页面为研究资源示例。复现前需核对原仓库版本、依赖与维护状态。</p></article></div> : <div className="br-paper-page"><div className="br-paper-top"><span>ar<span>χ</span>iv</span><span>Computer Science</span></div><div className="br-paper-search"><Search size={15}/><input aria-label="示例网页搜索" value={search} disabled={!canOperate} onChange={e => setSearch(e.target.value)} placeholder="Search papers…"/><button disabled={!canOperate || !search.trim()} onClick={() => setNotice(`示例页面已接收检索词“${search}”；此原型不发起真实搜索。`)}>搜索</button></div><div className="br-paper-body"><p className="br-breadcrumb">Computer Science <ChevronRight size={11}/> Computation and Language</p><div className="br-paper-meta">arXiv:1706.03762 <span>[cs.CL]</span></div><h2>Attention Is All You Need</h2><p className="br-authors">Ashish Vaswani, Noam Shazeer, Niki Parmar,<br/>Jakob Uszkoreit, Llion Jones, Aidan N. Gomez,<br/>Lukasz Kaiser, Illia Polosukhin</p><p className="br-version">Submitted 12 Jun 2017 · Revised 2 Aug 2023 (v7)</p><div className="br-article-tabs">{["摘要", "全文", "版本记录"].map(t => <button key={t} className={articleTab === t ? "selected" : ""} disabled={!canOperate} onClick={() => setArticleTab(t)}>{t}</button>)}</div>{articleTab === "摘要" ? <><h3>Abstract</h3><p className="br-abstract">The dominant sequence transduction models are based on complex recurrent or convolutional neural networks in an encoder-decoder configuration. We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely.</p><div className={`br-highlight ${phase === "running" && step === 0 ? "scanning" : ""}`}><span><FileText size={15}/>研究线索</span><p>Transformer · Self-attention · Sequence modeling</p><small>可整理为当前研究项目的文献材料</small></div></> : articleTab === "全文" ? <div className="br-fulltext"><FileText size={28}/><h3>Attention Is All You Need.pdf</h3><p>15 pages · v7 · arXiv</p><a href="https://arxiv.org/pdf/1706.03762" target="_blank" rel="noreferrer">打开真实 PDF <ExternalLink size={14}/></a></div> : <div className="br-history"><p><strong>v7</strong> 2 Aug 2023 <span>当前版本</span></p><p><strong>v6</strong> 24 Jul 2023</p><p><strong>v1</strong> 12 Jun 2017</p></div>}<div className="br-paper-links"><button disabled={!canOperate} onClick={() => setArticleTab("全文")}><FileText size={15}/>View PDF<ArrowUpRight size={14}/></button>{selected.includes("code") && <button disabled={!canOperate} onClick={() => {openBrowser(); setActivePage("code");}}><Link2 size={15}/>Code<ArrowUpRight size={14}/></button>}</div></div></div>}
         </div><div className="br-browser-bottom"><span><ShieldCheck size={13}/>{permission === "read" ? "Agent 仅阅读" : "Agent 可阅读与操作"} · 限所选网页</span><button onClick={() => setShowSources(v => !v)}>来源记录<ChevronDown size={13}/></button></div>{showSources && <div className="br-sources"><strong>本轮所选来源 · 演示</strong>{selected.map(id => <p key={id}>{pages.find(p => p.id === id)!.url}</p>)}<small>此列表记录页面范围，不代表发生了真实网络访问。</small></div>}
       </section>
-      <nav className="aw-tool-rail" aria-label="工作台工具">{workbenchTools.filter(tool => !caseItem || tool.id !== 'memory').map(({id,label,icon:Icon})=><button key={id} aria-label={id === 'memory' ? t('agentPreferences.title') : label} title={id === 'memory' ? t('agentPreferences.title') : label} aria-pressed={workbench === id} onClick={()=>{setWorkbench(id);setPanelOpen(true);if(caseItem) setActiveDocument(id === 'plan' ? 'plan' : undefined);}}><Icon size={22}/>{id === "browser" && busy && <i/>}</button>)}</nav>
+      <nav className="aw-tool-rail" aria-label="工作台工具">{workbenchTools.filter(tool => !caseItem || tool.id !== 'memory').map(({id,label,icon:Icon})=><button key={id} aria-label={id === 'memory' ? t('agentPreferences.title') : label} title={id === 'memory' ? t('agentPreferences.title') : label} aria-pressed={workbench === id} onClick={()=>{setWorkbench(id);setPanelOpen(true);if(caseItem || id === 'files') setActiveDocument(id === 'plan' ? 'plan' : undefined);}}><Icon size={22}/>{id === "browser" && busy && <i/>}</button>)}</nav>
       </section>}
     </div>
     {notice && <div className="br-toast" role="status"><CheckCircle2 size={16}/>{notice}</div>}

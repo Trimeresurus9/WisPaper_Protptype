@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { ArrowLeft, BookOpen, ChevronLeft, ChevronRight, Clock3, Code2, Cpu, Download, FileText, FolderOpen, FolderPlus, Globe2, Image, LayoutGrid, Library, Lightbulb, MessageSquare, MoreHorizontal, Network, PanelRight, Scan, Search, Sparkles, Text, UserRound, WandSparkles } from "lucide-react";
+import { HtmlPreview } from "./html/HtmlPreview";
+import type { HtmlArtifact } from "./html/artifact";
 import { CaseArtwork } from "../AgentCasePreview";
 import type { AgentCase } from "../home-agent-cases";
 import { Brain } from "lucide-react";
@@ -15,6 +17,7 @@ export const workbenchTools = [
   {id:"review", label:"论文评审", icon:MessageSquare}, {id:"capture", label:"截图与选区", icon:Scan}, {id:"gpu", label:"GPU 环境", icon:Cpu}
 ] as const;
 const functions = [
+  {title:"HTML 交互报告", lines:["生成可运行的 HTML 文件", "预览图表并分享结果"], icon:Code2},
   {title:"Ask AI", lines:["了解当前任务进度", "随时提问，不打断研究"], icon:Sparkles},
   {title:"灵感发现", lines:["通过苏格拉底式对话", "逐步明确方向并形成研究计划"], icon:Lightbulb},
   {title:"论文复现", lines:["自动完成论文复现：信息收集、计划生成、GPU 分配、代码执行"], icon:Code2},
@@ -72,9 +75,13 @@ function WorkbenchFiles({documents,activeDocument,onOpenDocument}: {documents:Wo
   return <div className="aw-files"><label><Search size={15}/><input placeholder="搜索文件名" aria-label="搜索文件名" value={search} onChange={event=>setSearch(event.target.value)}/></label><div className="aw-file-columns"><span>名称</span><span>来源</span></div><details open><summary><FolderOpen size={16}/>WorkDir</summary>{visible.map(item=><button className="aw-file-button" data-file key={item.id} onClick={()=>onOpenDocument(item.id)}><FileText size={16}/><span>{item.name}</span><small>当前任务</small></button>)}</details>{!visible.length && <p className="aw-muted">没有匹配的文件</p>}</div>;
 }
 
-export function AuxiliaryWorkbench({view,savedProject,onSelect,documents,activeDocument,onOpenDocument}: {view:WorkbenchView;savedProject:string;onSelect:(title:string)=>void;documents?:WorkbenchDocument[];activeDocument?:string;onOpenDocument?:(id:string|undefined)=>void}) {
+export function AuxiliaryWorkbench({view,savedProject,onSelect,documents,htmlFiles = [],activeDocument,onOpenDocument}: {view:WorkbenchView;savedProject:string;onSelect:(title:string)=>void;documents?:WorkbenchDocument[];htmlFiles?:{id:string;file:HtmlArtifact}[];activeDocument?:string;onOpenDocument?:(id:string|undefined)=>void}) {
   if(documents && onOpenDocument && ["files","plan"].includes(view)) return <WorkbenchFiles documents={documents} activeDocument={activeDocument} onOpenDocument={onOpenDocument}/>;
-  if(view === "files") return <div className="aw-files"><label><Search size={15}/><input placeholder="搜索文件名" aria-label="搜索文件名" onChange={e=>{const rows=e.currentTarget.closest('.aw-files')?.querySelectorAll<HTMLElement>('[data-file]'); rows?.forEach(row=>row.hidden=!row.textContent?.toLowerCase().includes(e.target.value.toLowerCase()));}}/></label><div className="aw-file-columns"><span>名称</span><span>来源</span></div><details open><summary><FolderOpen size={16}/>WorkDir</summary><div data-file><FileText size={16}/>研究计划.md<small>当前任务</small></div>{savedProject && <div data-file><FileText size={16}/>Attention Is All You Need<small>{savedProject}</small></div>}</details><details><summary><FolderOpen size={16}/>Files</summary><p>暂无上传材料</p></details><p className="aw-muted">网页研究中确认保存的材料会出现在此处。</p></div>;
+  const html = htmlFiles.find(item => item.id === activeDocument);
+  if (view === "files" && html && onOpenDocument) {
+    return <HtmlPreview key={html.id} file={html.file} onClose={() => onOpenDocument(undefined)}/>;
+  }
+  if(view === "files") return <div className="aw-files"><label><Search size={15}/><input placeholder="搜索文件名" aria-label="搜索文件名" onChange={e=>{const rows=e.currentTarget.closest('.aw-files')?.querySelectorAll<HTMLElement>('[data-file]'); rows?.forEach(row=>row.hidden=!row.textContent?.toLowerCase().includes(e.target.value.toLowerCase()));}}/></label><div className="aw-file-columns"><span>名称</span><span>来源</span></div><details open><summary><FolderOpen size={16}/>WorkDir</summary>{htmlFiles.map(({id,file}) => <button className="aw-file-button" data-file key={id} onClick={() => onOpenDocument?.(id)}><Code2 size={16}/><span>{file.name}</span><small>当前任务</small></button>)}<div data-file><FileText size={16}/>研究计划.md<small>当前任务</small></div>{savedProject && <div data-file><FileText size={16}/>Attention Is All You Need<small>{savedProject}</small></div>}</details><details><summary><FolderOpen size={16}/>Files</summary><p>暂无上传材料</p></details><p className="aw-muted">网页研究中确认保存的材料会出现在此处。</p></div>;
   const title=workbenchTools.find(t=>t.id===view)?.label || "研究工具";
   return <div className="aw-tool-detail"><span><BookOpen size={26}/></span><h3>{title}</h3><p>结合当前对话与研究材料，继续推进这项任务。</p><button onClick={()=>onSelect(title)}>在当前对话中使用</button></div>;
 }

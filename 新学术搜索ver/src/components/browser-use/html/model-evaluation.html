@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>模型性能对比</title>
+<style>
+  * { box-sizing: border-box }
+  body { margin: 0; background: #f3f6fa; color: #213448; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif }
+  main { max-width: 820px; margin: 20px auto; padding: clamp(20px,4vw,42px); background: white; border: 1px solid #dde5ec; border-radius: 14px }
+  .meta, .legend, .controls, .legend span { display: flex; align-items: center; gap: 8px }
+  .meta { justify-content: space-between; color: #64798a; font-size: 11px }
+  .meta strong { color: #14756a; font-weight: 600 }
+  h1 { font-size: clamp(26px,5vw,39px); letter-spacing: -.045em; margin: 18px 0 5px; color: #182e3e }
+  p { margin: 0; color: #627481; font-size: 13px }
+  .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 24px 0 }
+  .metric { padding: 14px 16px; background: #edf6f3; border-radius: 9px }
+  .metric + .metric { background: #f1f4f8 }
+  .metric small { color: #526b70; font-size: 11px }
+  .metric strong { display: block; margin-top: 6px; color: #125f56; font-size: clamp(22px,4vw,31px); line-height: 1.12; font-variant-numeric: tabular-nums; letter-spacing: -.03em }
+  .metric + .metric strong { color: #2d475d }
+  .controls { flex-wrap: wrap; justify-content: space-between; gap: 10px }
+  h2 { font-size: 15px; margin: 0 }
+  .switch { display: inline-flex; background: #f0f3f5; padding: 3px; border-radius: 7px }
+  button { font: inherit; font-size: 12px; border: 0; border-radius: 5px; background: transparent; padding: 5px 9px; color: #526674; cursor: pointer }
+  button[aria-pressed=true] { background: #fff; color: #174d46; box-shadow: 0 1px 3px #243c4a26 }
+  .legend { gap: 18px; margin: 15px 0 2px; font-size: 11px; color: #526674 }
+  .legend i { width: 14px; height: 3px; border-radius: 2px; background: #168778 }
+  .legend span + span i { background: #8397ac }
+  svg { width: 100%; height: auto; display: block; overflow: visible }
+  svg text { fill: #718393; font-size: 11px }
+  label { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 12px; padding-top: 14px; border-top: 1px solid #e3eaed; font-size: 12px; color: #526674 }
+  output { font-variant-numeric: tabular-nums; color: #213f4e; font-weight: 600 }
+  input { min-width: 80px; flex: 1; accent-color: #147c70 }
+  @media (max-width: 880px) { main { margin: 14px } }
+  @media (max-width: 360px) { main { margin: 8px; padding: 16px } .metrics { gap: 6px } .metric { padding: 12px } }
+</style>
+</head>
+<body>
+<main>
+  <div class="meta"><strong>实验评估报告</strong><span>示例数据 · 验证集</span></div>
+  <h1>模型性能对比</h1>
+  <p>比较改进模型与基线模型在 5 轮训练中的表现。</p>
+  <div class="metrics" aria-live="polite">
+    <div class="metric"><small id="score-label">改进模型准确率</small><strong id="score"></strong></div>
+    <div class="metric"><small>较基线提升（百分点）</small><strong id="gain"></strong></div>
+  </div>
+  <div class="controls"><h2>验证集表现</h2><div class="switch" role="group" aria-label="评估指标">
+    <button data-metric="accuracy" aria-pressed="true">准确率</button>
+    <button data-metric="f1" aria-pressed="false">F1 分数</button>
+  </div></div>
+  <div class="legend"><span><i></i>改进模型</span><span><i></i>基线模型</span></div>
+  <svg id="chart" viewBox="0 0 460 174" role="img"></svg>
+  <label for="epoch">训练轮次 <output id="round" for="epoch"></output><input id="epoch" type="range" min="1" max="5" value="5"></label>
+</main>
+<script>
+  const measurements = {
+    accuracy: { label: '准确率', improved: [75, 81.6, 86.2, 90.4, 93.8], baseline: [73.2, 78.4, 81.5, 84.1, 86.3] },
+    f1: { label: 'F1 分数', improved: [71.5, 77.8, 82.4, 87.6, 91.2], baseline: [70.1, 75.3, 78.6, 81.4, 83.5] }
+  };
+  const byId = id => document.getElementById(id);
+  const chart = byId('chart');
+  const buttons = document.querySelectorAll('[data-metric]');
+  let metric = 'accuracy';
+  function draw(tag, attributes, label) {
+    const element = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, value);
+    if (label) element.textContent = label;
+    chart.append(element);
+  }
+  function render() {
+    const data = measurements[metric];
+    const round = Number(byId('epoch').value);
+    const index = round - 1;
+    byId('round').value = round + ' / 5';
+    byId('score-label').textContent = '改进模型' + data.label;
+    byId('score').textContent = data.improved[index].toFixed(1) + '%';
+    byId('gain').textContent = '+' + (data.improved[index] - data.baseline[index]).toFixed(1);
+    buttons.forEach(button => button.setAttribute('aria-pressed', button.dataset.metric === metric));
+    chart.setAttribute('aria-label', '第 ' + round + ' 轮' + data.label + '，改进模型 ' + data.improved[index] + '%，基线模型 ' + data.baseline[index] + '%');
+    chart.replaceChildren();
+    const x = i => 36 + i * 101;
+    const y = value => 145 - (value - 70) * 4.2;
+    [70, 80, 90, 100].forEach(value => {
+      draw('line', { x1: 36, x2: 440, y1: y(value), y2: y(value), stroke: '#e0e8eb', 'stroke-dasharray': '3 4' });
+      draw('text', { x: 1, y: y(value) + 4 }, value + '%');
+    });
+    data.improved.forEach((_, i) => draw('text', { x: x(i), y: 166, 'text-anchor': 'middle' }, '第' + (i + 1) + '轮'));
+    for (const [values, color] of [[data.baseline, '#8397ac'], [data.improved, '#168778']]) {
+      const visible = values.slice(0, round);
+      draw('polyline', { points: visible.map((value, i) => x(i) + ',' + y(value)).join(' '), stroke: color, fill: 'none', 'stroke-width': 3, 'stroke-linejoin': 'round' });
+      visible.forEach((value, i) => draw('circle', { cx: x(i), cy: y(value), r: i === index ? 5 : 3, fill: color, stroke: 'white', 'stroke-width': 1.5 }));
+    }
+  }
+  buttons.forEach(button => button.onclick = () => { metric = button.dataset.metric; render(); });
+  byId('epoch').oninput = render;
+  render();
+</script>
+</body>
+</html>
