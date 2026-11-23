@@ -1,79 +1,73 @@
-import React from 'react';
-import { X, Zap } from 'lucide-react';
-import { domesticPlans, domesticTopUpPrice, TOP_UP_CREDITS, useBilling } from '../contexts/BillingContext';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Check, X } from 'lucide-react';
+import { TOP_UP_CREDITS, useBilling } from '../contexts/BillingContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { getCreditTopUpOffer } from '../utils/creditTopUpPricing';
+import './recharge-modal.css';
 
 interface RechargeModalProps {
   isOpen: boolean;
   onClose: () => void;
+  language?: 'zh' | 'en';
+  onViewPlans?: () => void;
+  quantity?: number;
 }
 
-export function RechargeModal({ isOpen, onClose }: RechargeModalProps) {
+export function RechargeModal({ isOpen, onClose, language: controlledLanguage, onViewPlans, quantity = 1 }: RechargeModalProps) {
   const { market, subscription } = useBilling();
-  const { language } = useLanguage();
+  const { language: contextLanguage } = useLanguage();
+  const language = controlledLanguage ?? contextLanguage;
+  const isZh = language === 'zh';
+  const offer = getCreditTopUpOffer(market, subscription, language);
+  const packs = Math.min(99, Math.max(1, Math.floor(quantity)));
+  const currency = market === 'domestic' || isZh ? '¥' : '$';
+  const amount = `${currency}${(offer.amount * packs).toFixed(2)}`;
+  const [completed, setCompleted] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setCompleted(false);
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    dialogRef.current?.focus();
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [isOpen, subscription.plan, subscription.end]);
 
   if (!isOpen) return null;
 
-  const plan = domesticPlans.find((item) => item.id === subscription.plan) ?? domesticPlans[0];
-  const overseasPlanPrice = plan.id === 'plus' ? { zh: 35, en: 5 } : plan.id === 'pro' ? { zh: 150, en: 20 } : { zh: 300, en: 40 };
-  const planCredits = Number(plan.credits.replaceAll(',', ''));
-  const amount = market === 'domestic'
-    ? `¥${domesticTopUpPrice(plan.id).toFixed(2)}`
-    : `${language === 'zh' ? '¥' : '$'}${((overseasPlanPrice[language] / planCredits) * TOP_UP_CREDITS).toFixed(2)}`;
-
-  return (
-    <>
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black bg-opacity-30 z-50"
-        onClick={onClose}
-      />
-
-      {/* Modal */}
-      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white rounded-xl shadow-2xl z-50">
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          <X className="w-5 h-5 text-gray-500" />
+  return createPortal(
+    <div className="credit-recharge-overlay" onClick={onClose}>
+      <div ref={dialogRef} className="credit-recharge-dialog" role="dialog" aria-modal="true"
+        aria-label={isZh ? '积分充值' : 'Top up credits'} tabIndex={-1}
+        onClick={event => event.stopPropagation()}
+        onKeyDown={event => {
+          if (event.key === 'Escape') { event.stopPropagation(); onClose(); }
+          if (event.key !== 'Tab') return;
+          const buttons = Array.from(dialogRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? []);
+          const first = buttons[0]; const last = buttons[buttons.length - 1];
+          if (event.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) { event.preventDefault(); last?.focus(); }
+          else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialogRef.current)) { event.preventDefault(); first?.focus(); }
+        }}>
+        <div className="credit-recharge-header">
+          <h2>{isZh ? '积分充值' : 'Top up credits'}</h2>
+          <button type="button" className="credit-recharge-close" aria-label={isZh ? '关闭充值弹窗' : 'Close top-up dialog'} onClick={onClose}><X size={18} aria-hidden="true" /></button>
+        </div>
+        {!offer.isMember ? <p className="credit-recharge-restricted">{isZh ? '充值包仅限 Plus 及以上会员购买' : 'Credit packs are available with Plus or above.'}</p> : completed ? <div className="credit-recharge-success" role="status"><Check size={24} aria-hidden="true" /><p>{isZh ? '充值演示已完成' : 'Top-up demo complete'}</p></div> : <>
+          <p className="credit-recharge-credits"><strong>{(TOP_UP_CREDITS * packs).toLocaleString()}</strong><span>{isZh ? '积分' : 'credits'}</span></p>
+          <p className="credit-recharge-validity">{isZh ? `${packs} 包 · 一次性购买 · 1 年有效` : `${packs} ${packs === 1 ? 'pack' : 'packs'} · One-time purchase · Valid for 1 year`}</p>
+          <div className="credit-recharge-total"><span>{offer.label}</span><strong>{amount}</strong></div>
+        </>}
+        <button type="button" className="credit-recharge-submit" onClick={!offer.isMember ? onViewPlans ?? onClose : completed ? onClose : () => setCompleted(true)}>
+          {!offer.isMember ? (isZh ? '查看会员套餐' : 'View membership plans') : completed ? (isZh ? '完成' : 'Done') : `${isZh ? '模拟充值' : 'Simulate top-up'} ${amount}`}
         </button>
-
-        {/* Header */}
-        <div className="text-center pt-8 pb-6 px-6 bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
-          <div className="flex justify-center mb-4">
-            <div className="w-14 h-14 bg-gradient-to-br from-gray-200 to-gray-300 rounded-full flex items-center justify-center border-2 border-gray-400">
-              <svg className="w-7 h-7 text-gray-900" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
-              </svg>
-            </div>
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">充值 Credits</h2>
-          <p className="text-gray-600 text-sm">唯一充值规格 · 按当前会员订阅单价等比例计算</p>
-        </div>
-
-        {/* Content */}
-        <div className="px-6 py-6">
-          <div className="mb-6 rounded-xl border-2 border-gray-900 p-5 text-left shadow-lg">
-            <div className="mb-3 inline-flex rounded-lg bg-gradient-to-br from-gray-700 to-gray-900 p-2.5 text-white"><Zap className="h-6 w-6" /></div>
-            <div className="flex items-start justify-between gap-4"><div><h3 className="text-lg font-bold text-gray-900">10K Credits Pack</h3><p className="mt-1 text-sm text-gray-500">{plan.name} 会员价</p></div><div className="text-3xl font-bold text-gray-900">{amount}</div></div>
-            <div className="mt-5 flex items-baseline gap-1"><span className="text-2xl font-bold text-gray-900">{TOP_UP_CREDITS.toLocaleString()}</span><span className="text-sm text-gray-600">Credits</span></div>
-            <p className="mt-3 text-xs leading-5 text-gray-500">订阅价格 ÷ 每月 Credits × 10,000 · 一次性购买</p>
-          </div>
-
-          {/* Purchase Button */}
-          <button
-            className="w-full py-3.5 bg-gradient-to-r from-gray-900 to-black hover:from-gray-800 hover:to-gray-900 text-white rounded-lg font-semibold text-base transition-all shadow-lg hover:shadow-xl"
-          >
-            立即充值 {amount}
-          </button>
-
-          {/* Info */}
-          <div className="mt-4 text-center text-xs text-gray-500">
-            <p>充值后积分立即到账 · {market === 'domestic' ? '支付宝模拟支付' : 'Stripe 模拟支付'}</p>
-          </div>
-        </div>
+        {offer.isMember && <p className="credit-recharge-note">{isZh ? '本地演示，不会实际扣款或入账' : 'Local demo. No payment or account credit is applied.'}</p>}
       </div>
-    </>
+    </div>, document.body,
   );
 }

@@ -10,6 +10,7 @@ import { HomeFaqSection } from './HomeFaqSection';
 import { HomeSearchLanding } from './HomeSearchLanding';
 import { LogoLoop } from './LogoLoop';
 import { MarketingSeoPage } from './MarketingSeoPage';
+import appLogo from '../assets/3ce02a66a6df7d8cd1f86de17846e94de4e9df61.png';
 import { PricingPage } from './PricingPage';
 import { ResearchLanding } from './ResearchLanding';
 import { TranslationLandingPage } from './TranslationLandingPage';
@@ -48,7 +49,7 @@ interface HomePageProps {
   onNavigateToWorkspace: () => void;
   onNavigate?: (view: ViewMode) => void;
   onOpenPricing?: () => void;
-  onOpenRecharge?: () => void;
+  onOpenRecharge?: (language?: 'zh' | 'en') => void;
   onStartSearch?: (query?: string) => void;
   onOpenFigureToPPTX?: () => void;
 }
@@ -921,6 +922,7 @@ export function HomePage({ onNavigateToWorkspace, onNavigate, onOpenPricing, onO
     <div
       className={cn(
         "min-h-screen text-slate-950",
+        activePage === 'pricing' && "pricing-marketing",
         isHomePage
           ? "bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.16),_transparent_32%),radial-gradient(circle_at_80%_20%,_rgba(59,130,246,0.14),_transparent_28%),linear-gradient(180deg,_rgba(255,255,255,0.92),_rgba(248,250,252,0.96))]"
           : "bg-[#f4f7fb]",
@@ -943,6 +945,9 @@ export function HomePage({ onNavigateToWorkspace, onNavigate, onOpenPricing, onO
             }}
             className="flex items-center gap-3"
           >
+            {activePage === 'pricing' ? (
+              <><img className="pricing-brand-mark" src={appLogo} alt="" /><span className="pricing-brand-name">WisPaper</span></>
+            ) : <>
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 text-base font-bold text-white shadow-sm">
               W
             </div>
@@ -950,6 +955,7 @@ export function HomePage({ onNavigateToWorkspace, onNavigate, onOpenPricing, onO
               <p className="text-base font-semibold text-slate-950">WisPaper</p>
               <p className="text-xs text-slate-500">{isZh ? '首页' : 'Home'}</p>
             </div>
+            </>}
           </button>
 
           <nav className="hidden md:flex">

@@ -65,16 +65,28 @@ function BillingDialog({ title, children, onClose, payment = false }: { title: s
   </div>, document.body);
 }
 
-export function DomesticBilling({ compact = false, ordersOnly = false, upgradeOnly = false, purchaseOnly = false, initialPlan, onFinished }: { compact?: boolean; ordersOnly?: boolean; upgradeOnly?: boolean; purchaseOnly?: boolean; initialPlan?: PlanId; onFinished?: () => void }) {
+type DomesticBillingProps = {
+  compact?: boolean;
+  ordersOnly?: boolean;
+  upgradeOnly?: boolean;
+  purchaseOnly?: boolean;
+  initialPlan?: PlanId;
+  initialStorage?: Record<PlanId, number>;
+  initialPurchase?: DomesticPurchaseMode;
+  onFinished?: () => void;
+  onOpenRecharge?: (language?: 'zh' | 'en') => void;
+};
+
+export function DomesticBilling(props: DomesticBillingProps) {
   const { revision } = useBilling();
-  return <DomesticBillingContent key={revision} compact={compact} ordersOnly={ordersOnly} upgradeOnly={upgradeOnly} purchaseOnly={purchaseOnly} initialPlan={initialPlan} onFinished={onFinished} />;
+  return <DomesticBillingContent key={revision} {...props} />;
 }
 
-function DomesticBillingContent({ compact, ordersOnly, upgradeOnly, purchaseOnly, initialPlan, onFinished }: { compact: boolean; ordersOnly: boolean; upgradeOnly: boolean; purchaseOnly: boolean; initialPlan?: PlanId; onFinished?: () => void }) {
+function DomesticBillingContent({ compact = false, ordersOnly = false, upgradeOnly = false, purchaseOnly = false, initialPlan, initialStorage, initialPurchase, onFinished, onOpenRecharge }: DomesticBillingProps) {
   const { subscription: sub, setSubscription, orders, addOrder, outcome, creatorDiscountPercent } = useBilling();
   const [selected, setSelected] = useState<PlanId>(initialPlan ?? 'pro');
-  const [storage, setStorage] = useState<Record<PlanId, number>>({ plus: 10, pro: 50, max: 100, max5: 250 });
-  const [purchase, setPurchase] = useState<DomesticPurchaseMode>('single');
+  const [storage, setStorage] = useState<Record<PlanId, number>>(initialStorage ?? { plus: 10, pro: 50, max: 100, max5: 250 });
+  const [purchase, setPurchase] = useState<DomesticPurchaseMode>(initialPurchase ?? 'single');
   const [dialog, setDialog] = useState<'checkout' | 'result' | 'agreement' | 'support' | null>(null);
   const [consent, setConsent] = useState(false);
   const [resume, setResume] = useState(false);
@@ -86,11 +98,11 @@ function DomesticBillingContent({ compact, ordersOnly, upgradeOnly, purchaseOnly
   const [purchaseTarget, setPurchaseTarget] = useState<PlanId | null>(null);
   const locked = useRef(false);
   useEffect(() => {
-    if (!sub.end) { setPurchase('single'); if (initialPlan) setSelected(initialPlan); return; }
+    if (!sub.end || Date.parse(sub.end) <= Date.now()) { setPurchase(initialPurchase ?? 'single'); if (initialPlan) setSelected(initialPlan); return; }
     const nextPlan = domesticPlans.find((item) => domesticPlanRank(item.id) > domesticPlanRank(sub.plan));
     setSelected(purchaseOnly ? initialPlan && domesticPlanRank(initialPlan) > domesticPlanRank(sub.plan) ? initialPlan : nextPlan?.id ?? sub.plan : sub.plan);
-    setPurchase(sub.renewalPeriod === 'annual' ? 'annual' : sub.renewal ? 'recurring' : 'single');
-  }, [sub.end, sub.plan, sub.renewal, sub.renewalPeriod, purchaseOnly, initialPlan]);
+    setPurchase(sub.renewalPeriod === 'annual' ? 'annual' : sub.renewal && initialPurchase !== 'annual' ? 'recurring' : initialPurchase ?? 'single');
+  }, [sub.end, sub.plan, sub.renewal, sub.renewalPeriod, purchaseOnly, initialPlan, initialPurchase]);
   const plan = domesticPlans.find((p) => p.id === selected)!;
   const current = domesticPlans.find((p) => p.id === sub.plan)!;
   const active = Boolean(sub.end && new Date(sub.end).getTime() > Date.now());
@@ -186,17 +198,6 @@ function DomesticBillingContent({ compact, ordersOnly, upgradeOnly, purchaseOnly
     {notice && <div role="status" className="mt-5 rounded-xl bg-emerald-50 p-4 text-sm leading-6 text-emerald-800">{notice}</div>}
 
     {!ordersOnly && !purchaseOnly && <>
-      {!compact && upgradeOnly && <section className="subscription-management" aria-label="会员信息">
-        <div className="subscription-management-head"><h3>会员信息</h3><span>国内版 · 支付宝（模拟）</span></div>
-        <div className="subscription-management-grid">
-          <div className="subscription-management-item"><span className="subscription-label">当前会员</span><strong className="subscription-value">{active ? current.name : sub.end ? '会员已到期' : 'Free'}</strong><span className="subscription-note">{sub.end ? `权益截止 ${dateLabel(sub.end)} · ${currentStorage} GB` : '选择上方套餐开通会员'}</span></div>
-          <div className="subscription-management-item"><span className="subscription-label">连续订阅</span><strong className="subscription-value">{sub.failure ? '续费失败' : active && sub.renewal ? `连续包${sub.renewalPeriod === 'annual' ? '年' : '月'}` : '未开启'}</strong><span className="subscription-note">{active && sub.renewal ? `${dateLabel(sub.end)} · ¥${currentRenewalPrice}/${sub.renewalPeriod === 'annual' ? '年' : '月'}` : '无自动扣费计划'}</span></div>
-          <div className="subscription-management-item"><span className="subscription-label">支付方式</span><div className="locked-payment"><span className="card-brand">支付宝</span><strong className="subscription-value">{sub.end ? '演示账户 ···· 8000' : '开通时授权'}</strong></div><span className="subscription-note">不会真实扣款或收集支付凭据</span></div>
-          <div className="subscription-management-item"><span className="subscription-label">订阅规则</span><strong className="subscription-value">{active ? sub.scheduledFreeAt ? '订阅已取消' : sub.renewalPeriod === 'annual' ? '年付周期锁定' : '仅支持向上升级' : '暂无有效订阅'}</strong><span className="subscription-note">{sub.scheduledFreeAt ? `本期权益保留至 ${dateLabel(sub.scheduledFreeAt)}` : '取消订阅请前往个人中心“会员与 Credits”'}</span></div>
-        </div>
-        {sub.failure && <p role="alert" className="border-t border-slate-200 bg-amber-50 p-4 text-xs text-amber-800">本次续费失败，未延长权益；请检查支付宝付款设置。此原型不会自动重试扣款。</p>}
-        {active && sub.renewal && <p className="border-t border-slate-200 p-4 text-xs text-slate-500">续费前 5 日提醒预览：你的 {current.name} 将于 {dateLabel(sub.end)} 通过支付宝扣费 ¥{currentRenewalPrice}。可在个人中心“会员与 Credits”取消订阅；此演示不实际发送通知。</p>}
-      </section>}
       {compact && sub.end && <section className="mt-7 rounded-2xl border border-slate-200 bg-slate-50 p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs text-slate-500">当前会员</p><h2 className="mt-2 text-xl font-semibold">{current.name} · {active ? '会员有效' : '已到期'}</h2></div><span className={`rounded-full px-3 py-1.5 text-xs ${sub.failure ? 'bg-amber-100 text-amber-800' : sub.scheduledFreeAt && active ? 'bg-sky-100 text-sky-800' : sub.renewal && active ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-600'}`}>{sub.failure ? '续费失败' : sub.scheduledFreeAt && active ? '下周期降级为 Free' : sub.renewal && active ? '自动续费已开启' : '自动续费未开启'}</span></div>
         <dl className="mt-5 grid gap-5 text-sm sm:grid-cols-2"><div><dt className="text-slate-500">本期权益截止</dt><dd className="mt-1 font-medium">{dateLabel(sub.end)}</dd></div><div><dt className="text-slate-500">{sub.renewal && active ? '下次扣费' : '后续扣费'}</dt><dd className="mt-1 font-medium">{sub.renewal && active ? `${dateLabel(sub.end)} · ¥${currentRenewalPrice}/${sub.renewalPeriod === 'annual' ? '年' : '月'}` : '无自动扣费计划'}</dd></div><div><dt className="text-slate-500">支付渠道</dt><dd className="mt-1">支付宝 · 演示账户 ···· 8000</dd></div><div><dt className="text-slate-500">周期额度</dt><dd className="mt-1">{current.credits} Credits · {currentStorage} GB 存储</dd></div></dl>
@@ -238,9 +239,9 @@ function DomesticBillingContent({ compact, ordersOnly, upgradeOnly, purchaseOnly
   </>;
   return purchaseOnly ? <div className="text-slate-900">{purchaseChooser}{management}</div> : compact || ordersOnly ? <div className="p-6 text-slate-900">{management}</div> : <><DomesticPricingLayout
     purchase={purchase} onPurchaseChange={changePurchase}
-    active={active} upgraded={Boolean(sub.upgraded)} renewal={sub.renewal} renewalPeriod={sub.renewalPeriod} firstUsed={sub.firstUsed} currentPlan={sub.plan} currentPlanEnd={sub.end} renewalFailure={sub.failure}
+    active={active} upgraded={Boolean(sub.upgraded)} renewal={sub.renewal} renewalPeriod={sub.renewalPeriod} firstUsed={sub.firstUsed} currentPlan={sub.plan}
     storage={active ? { ...storage, [sub.plan]: currentStorage } : storage} onStorageChange={(planId, gb) => setStorage((values) => ({ ...values, [planId]: gb }))}
     onBuy={(planId) => setPurchaseTarget(planId)}
-    onHelp={() => setDialog('support')}
-  >{management}</DomesticPricingLayout>{purchaseTarget && <BillingDialog title="选择购买方案" onClose={() => setPurchaseTarget(null)}><DomesticBilling purchaseOnly initialPlan={purchaseTarget} onFinished={() => setPurchaseTarget(null)} /></BillingDialog>}</>;
+    onHelp={() => setDialog('support')} onOpenRecharge={onOpenRecharge}
+  >{management}</DomesticPricingLayout>{purchaseTarget && <BillingDialog title="选择购买方案" onClose={() => setPurchaseTarget(null)}><DomesticBilling purchaseOnly initialPlan={purchaseTarget} initialStorage={storage} initialPurchase={purchase} onFinished={() => setPurchaseTarget(null)} /></BillingDialog>}</>;
 }

@@ -1,0 +1,47 @@
+.pricing-account-slot { margin-top: 26px; }
+.pricing-account-slot > .pricing-membership-summary,
+.pricing-account-slot > .pricing-payment-selector { margin: 0; }
+.pricing-payment-selector { min-width: 0; margin: 26px 0 0; padding: 0; border: 0; color: #23282f; }
+.pricing-payment-selector legend { padding: 0; margin-bottom: 12px; font-size: 14px; line-height: 22px; font-weight: 500; }
+.pricing-payment-options { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; }
+.pricing-payment-option { position: relative; min-width: 0; cursor: pointer; }
+.pricing-payment-option input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.pricing-payment-content { display: flex; position: relative; pointer-events: none; flex-wrap: wrap; align-items: center; justify-content: center; align-content: center; gap: 6px; min-height: 64px; height: 100%; padding: 12px 24px 12px 14px; border: 1px solid #e2e6ec; border-radius: 12px; background: rgba(255,255,255,.72); transition: border-color .15s, background .15s; }
+.pricing-payment-option:hover .pricing-payment-content { background: #fff; border-color: #abb3bd; }
+.pricing-payment-option input:checked + .pricing-payment-content { border-color: #23282f; background: #fff; box-shadow: inset 0 0 0 .5px #23282f; }
+.pricing-payment-option input:focus-visible + .pricing-payment-content { outline: 2px solid #0079ff; outline-offset: 3px; }
+.pricing-provider { font-size: 16px; font-weight: 650; letter-spacing: -.035em; }
+.pricing-provider.stripe { color: #635bff; }
+.pricing-wallets { font-size: 11px; color: #636c76; white-space: nowrap; }
+.pricing-payment-check { position: absolute; top: 8px; right: 8px; color: #23282f; visibility: hidden; }
+.pricing-payment-option input:checked + .pricing-payment-content .pricing-payment-check { visibility: visible; }
+.pricing-membership-summary { margin: 0 0 24px; border: 1px solid #e2e6ec; border-radius: 16px; background: #fff; color: #23282f; overflow: hidden; }
+.pricing-membership-heading { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-bottom: 1px solid #edf0f3; }
+.pricing-membership-heading h2 { margin: 0; font-size: 14px; line-height: 22px; font-weight: 500; }
+.pricing-membership-heading > span { font-size: 12px; color: #8a601d; }
+.pricing-membership-summary dl { display: grid; grid-template-columns: 1fr 1fr; margin: 0; padding: 22px 24px; }
+.pricing-membership-summary dl > div + div { padding-left: 32px; border-left: 1px solid #e2e6ec; }
+.pricing-membership-summary dt { font-size: 12px; color: #636c76; }
+.pricing-membership-summary dd { margin: 8px 0 0; font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -.025em; font-variant-numeric: tabular-nums; }
+.pricing-checkout { width: min(520px,calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; border-radius: 16px; padding: 28px; color: #23282f; }
+.pricing-checkout .pricing-payment-options { grid-template-columns: 1fr 1fr; }
+.pricing-checkout .pricing-payment-selector { margin: 8px 0 0; }
+.pricing-checkout-details { display: grid; gap: 14px; margin: 12px 0 0; font-size: 14px; }
+.pricing-checkout-details > div { display: flex; justify-content: space-between; gap: 20px; }
+.pricing-checkout-details dt { color: #636c76; }
+.pricing-checkout-details dd { margin: 0; font-weight: 500; text-align: right; }
+.pricing-checkout-total { display: flex; justify-content: space-between; align-items: baseline; margin: 8px 0 0; padding-top: 20px; border-top: 1px solid #e2e6ec; font-size: 14px; }
+.pricing-checkout-total strong { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.035em; }
+.pricing-checkout-submit { min-height: 44px; width: 100%; border: 0; border-radius: 999px; background: #23282f; color: #fff; font-size: 14px; cursor: pointer; }
+.pricing-checkout-submit:hover { background: #343c46; }
+.pricing-checkout-submit:focus-visible { outline: 2px solid #0079ff; outline-offset: 3px; }
+.pricing-checkout-message { margin: 0; color: #226c9b; font-size: 14px; line-height: 1.6; }
+.pricing-checkout-message.error { color: #a24436; }
+@media (max-width: 760px) {
+  .pricing-payment-options { grid-template-columns: 1fr 1fr; }
+  .pricing-membership-heading { padding: 14px 20px; }
+  .pricing-membership-summary dl { padding: 20px; gap: 16px; }
+  .pricing-membership-summary dl > div + div { padding-left: 16px; }
+  .pricing-membership-summary dd { font-size: 17px; line-height: 24px; }
+  .pricing-checkout { padding: 24px; }
+}

@@ -4,6 +4,7 @@ import { OnboardingMockControls } from './onboarding/OnboardingMockControls';
 import type { OnboardingController, OnboardingPage } from './onboarding/useOnboarding';
 import { Copy, Play, RotateCcw, TerminalSquare, X } from 'lucide-react';
 import { CREATOR_DISCOUNT_CODE, domesticPlanRank, domesticPlans, domesticStorageOptions, nextMonth, nextYear, type PlanId, useBilling } from '../contexts/BillingContext';
+import { canPurchaseCreditTopUp } from '../utils/creditTopUpPricing';
 
 interface Scenario { title: string; description: string; input: string; action: 'ask' | 'search' | 'agent' }
 
@@ -138,14 +139,15 @@ export function MockConsole({ currentView, userCredits, onUserCreditsChange, onA
         <div className="grid grid-cols-2 gap-2">{([
           ['upgraded-plus', '已升级 · Plus'], ['upgraded-pro', '已升级 · Pro'], ['upgraded-max', '已升级 · Max x2'], ['upgraded-annual', '年付已升级'], ['refunded-order', '进行中 + 退款订单'], ['downgraded-refunded', '已降级 Free + 全额退款'],
         ] as const).map(([value, label]) => <button key={value} onClick={() => scenario(value)} className="rounded-lg border border-blue-500/40 bg-blue-500/10 px-2 py-2 text-xs text-blue-200 hover:bg-blue-500/20">{label}</button>)}</div>
-        <p className="text-[11px] leading-5 text-slate-500">购买更低等级仍受限制；国内版可单独立即降级为 Free 并模拟全额退款。取消订阅只停止下周期续费。</p>
+        <p className="text-[11px] leading-5 text-slate-500">购买更低等级仍受限制；国内版可单独立即降级为 Free 并模拟全额退款。取消订阅只停止下周期续费。</p></>}
         <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">定价页状态设置</div>
         <div className="grid grid-cols-3 gap-2">
           <label className="text-[11px] text-slate-400">会员等级<select aria-label="Mock 会员等级" value={activeMembership ? subscription.plan : 'free'} onChange={(event) => configurePlan(event.target.value as PlanId | 'free')} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-slate-200"><option value="free">Free</option>{domesticPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>
           <label className="text-[11px] text-slate-400">付费周期<select aria-label="Mock 付费周期" value={subscription.renewalPeriod ?? 'monthly'} disabled={!activeMembership} onChange={(event) => configurePeriod(event.target.value as 'monthly' | 'annual')} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-slate-200 disabled:opacity-40"><option value="monthly">月付</option><option value="annual">年付</option></select></label>
           <label className="text-[11px] text-slate-400">续订方式<select aria-label="Mock 续订方式" value={subscription.renewal ? 'recurring' : 'single'} disabled={!activeMembership} onChange={(event) => configureRenewal(event.target.value === 'recurring')} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-slate-200 disabled:opacity-40"><option value="single" disabled={subscription.renewalPeriod === 'annual'}>单次购买</option><option value="recurring">连续订阅</option></select></label>
         </div>
-        <p className="text-[11px] leading-5 text-slate-500">Pricing 页与紧凑购买弹窗均只展示当前及更高等级；无有效会员时展示全部套餐。年付会员不显示月付选项。</p>
+        <div className="flex items-center justify-between text-xs text-slate-400" aria-live="polite"><span>积分充值包</span><span>{canPurchaseCreditTopUp(subscription) ? '可购买' : '不可购买 · Plus 及以上专享'}</span></div>
+        {market === 'domestic' && <><p className="text-[11px] leading-5 text-slate-500">Pricing 页与紧凑购买弹窗均只展示当前及更高等级；无有效会员时展示全部套餐。年付会员不显示月付选项。</p>
         <label className="block text-xs text-slate-400">博主优惠码模拟 <span className="font-mono text-blue-200">{CREATOR_DISCOUNT_CODE}</span><select aria-label="Mock 博主折扣" value={creatorDiscountPercent} onChange={(event) => setCreatorDiscountPercent(Number(event.target.value))} className="mt-2 block w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-slate-200"><option value={10}>首月优惠 10%</option><option value={25}>首月优惠 25%</option><option value={30}>首月优惠 30%</option></select><span className="mt-1 block text-[11px] leading-5 text-slate-500">演示码只抵扣首月对应金额，优先于首月 8 折，不叠加。</span></label>
         <label className="block text-xs text-slate-400">下次模拟支付结果<select value={outcome} onChange={(event) => setOutcome(event.target.value as typeof outcome)} className="mt-2 block w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-slate-200"><option value="success">支付与签约成功</option><option value="payment-failed">支付失败 · 不发放权益</option><option value="sign-failed">支付成功 · 签约失败</option></select></label></>}
       </div>
