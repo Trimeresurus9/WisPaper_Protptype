@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState } from 'react';
+import type { PricingPaymentMethodId } from '../utils/pricingPaymentMethods';
 
 export const domesticPlans = [
   { id: 'plus', name: 'Plus', first: 28, recurring: 35, single: 35, annualMonthly: 30, annualTotal: 360, credits: '10,000', storage: '10 GB', description: '适合日常搜索与文献阅读' },
@@ -34,7 +35,7 @@ export const domesticPurchasePrice = (planId: PlanId, purchase: DomesticPurchase
   return { total: Math.round((regularTotal - discount + storageTotal) * 100) / 100, discount, discountSource: creatorDiscountPercent > 0 ? 'creator' as const : discountPercent > 0 ? 'first-month' as const : null };
 };
 export type Market = 'domestic' | 'overseas';
-export type Subscription = { plan: PlanId; storageGb?: number; end: string; renewal: boolean; renewalPeriod?: 'monthly' | 'annual'; failure: boolean; firstUsed: boolean; upgraded?: boolean; scheduledFreeAt?: string };
+export type Subscription = { plan: PlanId; storageGb?: number; end: string; renewal: boolean; renewalPeriod?: 'monthly' | 'annual'; failure: boolean; firstUsed: boolean; upgraded?: boolean; scheduledFreeAt?: string; paymentMethod?: PricingPaymentMethodId };
 export type BillingOrderStatus = 'processing' | 'paid' | 'refund-processing' | 'refunded' | 'refund-rejected';
 export type BillingOrder = { id: string; plan: string; amount: number; date: string; kind: string; status: BillingOrderStatus; relatedOrderId?: string };
 export function nextMonth(date: Date) {

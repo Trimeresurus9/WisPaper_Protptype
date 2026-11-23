@@ -157,6 +157,11 @@ export default function App() {
     setShowPaywallModal(true);
   };
   const [showRechargeModal, setShowRechargeModal] = useState(false);
+  const [rechargeLanguage, setRechargeLanguage] = useState<'zh' | 'en' | undefined>();
+  const openRecharge = (language?: 'zh' | 'en') => {
+    setRechargeLanguage(language);
+    setShowRechargeModal(true);
+  };
   const [showDeepSearchTooltip, setShowDeepSearchTooltip] = useState(false);
   const [scholarQAKey, setScholarQAKey] = useState(0);
   const [agentKey, setAgentKey] = useState(0);
@@ -440,7 +445,7 @@ export default function App() {
             onOpenInvite={() => setShowInviteModal(true)}
             onOpenPaywall={() => openPricing()}
             onOpenUpgradePricing={() => openPricing('account-upgrade')}
-            onOpenRecharge={() => setShowRechargeModal(true)}
+            onOpenRecharge={() => openRecharge()}
             onOpenNotifications={() => setShowNotificationDrawer(true)}
             onNewScholarQA={handleResetScholarQA}
             onResetSearch={handleResetSearch}
@@ -457,7 +462,7 @@ export default function App() {
               onNavigateToWorkspace={() => setViewMode("explore")}
               onNavigate={(view) => setViewMode(view as any)}
               onOpenPricing={() => openPricing()}
-              onOpenRecharge={() => setShowRechargeModal(true)}
+              onOpenRecharge={openRecharge}
               onStartSearch={handleStartSearchFromHome}
             />
           ) : isHomeFlow ? (
@@ -632,7 +637,7 @@ export default function App() {
               initialPrompt={initialAgentPrompt}
               initialSkill={homeAgentLaunch?.prompt === initialAgentPrompt ? homeAgentLaunch.skill : undefined}
               userCredits={mockUserCredits}
-              onRecharge={() => setShowRechargeModal(true)}
+              onRecharge={() => openRecharge()}
               onUpgrade={() => openPricing()}
               onOpenProjects={() => setViewMode("research-projects")}
               onTaskActiveChange={setAgentTaskActive}
@@ -718,7 +723,13 @@ export default function App() {
         {/* Recharge Modal */}
         <RechargeModal
           isOpen={showRechargeModal}
+          language={rechargeLanguage}
           onClose={() => setShowRechargeModal(false)}
+          onViewPlans={() => {
+            setShowRechargeModal(false);
+            if (viewMode === 'home') window.scrollTo({ top: 0, behavior: 'smooth' });
+            else openPricing();
+          }}
         />
 
         {/* Notification Drawer */}

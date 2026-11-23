@@ -1,9 +1,17 @@
+import { FreePlanCard, MembershipPlanCard, StorageChoice } from './MembershipPlanCard';
+import { commonToolComparisonRows, comparisonRowOrder, modelAccess, researchComparisonRows } from './pricingBenefits';
+import { CreditTopUpDrawer } from './CreditTopUpDrawer';
 import { PricingStyles } from './PricingStyles';
 import React from 'react';
-import { Check, ChevronDown, HelpCircle, Minus } from 'lucide-react';
+import { Check, Minus } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { TOP_UP_CREDITS, useBilling } from '../contexts/BillingContext';
+import { domesticPlanRank, useBilling } from '../contexts/BillingContext';
 import { DomesticBilling } from './DomesticBilling';
+import { planPrices, maxPlans } from '../utils/pricingPlans';
+import type { PlanId } from '../contexts/BillingContext';
+import type { PricingPaymentMethodId } from '../utils/pricingPaymentMethods';
+import { MembershipSummary, PaymentMethodSelector } from './PricingAccount';
+import { PricingCheckout, type PricingQuote } from './PricingCheckout';
 
 type BillingCycle = 'monthly' | 'annual';
 type LocalizedText = { zh: string; en: string };
@@ -38,8 +46,6 @@ const formatCurrency = (amount: number, language: 'zh' | 'en') => {
   return language === 'zh' ? `¥${formattedAmount}` : `$${formattedAmount}`;
 };
 
-const roundMoney = (amount: number) => Math.round((amount + 1e-9) * 100) / 100;
-
 const formatPlanPrice = (
   price: LocalizedPrice,
   language: 'zh' | 'en',
@@ -72,13 +78,11 @@ const formatAnnualTotal = (
   return formatCurrency(Math.ceil(total), language);
 };
 
-const formatAnnualBilling = (total: string, language: 'zh' | 'en') =>
-  language === 'zh' ? `年付总计 ${total}` : `${total} billed yearly`;
-
 const formatStoragePrice = (
   storageGb: number,
   baseStorageGb: number,
   language: 'zh' | 'en',
+  isAnnual: boolean,
 ) => {
   const extraStorageGb = Math.max(storageGb - baseStorageGb, 0);
 
@@ -86,7 +90,7 @@ const formatStoragePrice = (
     return language === 'zh' ? '基础存储' : 'Base storage';
   }
 
-  const price = getExtraStoragePrice(storageGb, baseStorageGb, language);
+  const price = getExtraStoragePrice(storageGb, baseStorageGb, language) * (isAnnual ? ANNUAL_STORAGE_DISCOUNT : 1);
   return language === 'zh'
     ? `+${formatCurrency(price, language)} / 月`
     : `+${formatCurrency(price, language)} / mo`;
@@ -94,70 +98,13 @@ const formatStoragePrice = (
 
 const copy = (text: LocalizedText, language: 'zh' | 'en') => text[language];
 
-const planPrices = {
-  free: {
-    monthly: { zh: 0, en: 0 },
-    annual: { zh: 0, en: 0 },
-    annualTotal: { zh: 0, en: 0 },
-  },
-  plus: {
-    monthly: { zh: 35, en: 5 },
-    annual: { zh: 30, en: 4.2 },
-    annualTotal: { zh: 360, en: 50 },
-  },
-  pro: {
-    monthly: { zh: 150, en: 20 },
-    annual: { zh: 105, en: 15 },
-    annualTotal: { zh: 1260, en: 180 },
-  },
-};
-
-const maxPlans = {
-  x2: {
-    price: { zh: 300, en: 40 },
-    annualPrice: { zh: 225, en: 30 },
-    annualTotal: { zh: 2700, en: 360 },
-    monthly: '400,000',
-    passive: '1,000',
-    projectStorage: '100GB',
-  },
-  x5: {
-    price: { zh: 750, en: 100 },
-    annualPrice: { zh: 565, en: 75 },
-    annualTotal: { zh: 6780, en: 900 },
-    monthly: '1,000,000',
-    passive: '2,500',
-    projectStorage: '250GB',
-  },
-};
-
 const comparisonRows = [
-  { label: { zh: '快速搜索', en: 'Quick Search' }, free: true, plus: true, pro: true, maxX2: true, maxX5: true },
-  { label: { zh: '深度搜索', en: 'Deep Search' }, free: true, plus: true, pro: true, maxX2: true, maxX5: true },
-  { label: { zh: '问答', en: 'QA' }, free: true, plus: true, pro: true, maxX2: true, maxX5: true },
-  { label: { zh: '信息流', en: 'Feeds' }, free: true, plus: true, pro: true, maxX2: true, maxX5: true },
-  { label: { zh: '调研综述', en: 'Survey' }, free: false, plus: false, pro: true, maxX2: true, maxX5: true },
-  { label: { zh: 'Agent', en: 'Agent' }, free: false, plus: true, pro: true, maxX2: true, maxX5: true },
-  { label: { zh: 'AI 索引', en: 'AI Index' }, free: '50K', plus: { zh: '全部', en: 'All' }, pro: { zh: '全部', en: 'All' }, maxX2: { zh: '全部', en: 'All' }, maxX5: { zh: '全部', en: 'All' } },
+  modelAccess,
+  ...researchComparisonRows,
+  ...commonToolComparisonRows,
   { label: { zh: '基础高速存储', en: 'Base high-speed storage' }, free: '1GB', plus: '10GB', pro: '50GB', maxX2: '100GB', maxX5: '250GB' },
   { label: { zh: '额外充值折扣', en: 'Top-up discount' }, free: false, plus: { zh: '8.8 折', en: '12% off' }, pro: { zh: '5 折', en: '50% off' }, maxX2: { zh: '5 折', en: '50% off' }, maxX5: { zh: '5 折', en: '50% off' } },
-];
-
-function InfoLabel({ label, tooltip, dark = false, language }: { label: string; tooltip: string; dark?: boolean; language: 'zh' | 'en' }) {
-  return (
-    <span className="uber-info-label">
-      <span>{label}</span>
-      <span className="uber-tooltip-wrap">
-        <button type="button" className={`uber-tooltip-icon ${dark ? 'dark' : ''}`} aria-label={language === 'zh' ? `${label}说明` : `${label} details`}>
-          <HelpCircle className="h-4 w-4" />
-        </button>
-        <span className="uber-tooltip-content" role="tooltip">
-          {tooltip}
-        </span>
-      </span>
-    </span>
-  );
-}
+].sort((a, b) => comparisonRowOrder(a.label.zh) - comparisonRowOrder(b.label.zh));
 
 function Availability({ value, language }: { value: ComparisonValue; language: 'zh' | 'en' }) {
   if (value === true) {
@@ -179,107 +126,76 @@ function Availability({ value, language }: { value: ComparisonValue; language: '
   return <span className="uber-table-value">{typeof value === 'string' ? value : copy(value, language)}</span>;
 }
 
-function PlanStorageSelector({
-  planKey,
-  baseStorageGb,
-  value,
-  isOpen,
-  dark = false,
-  language,
-  onToggle,
-  onChange,
-}: {
-  planKey: StoragePlanKey;
-  baseStorageGb: number;
-  value: number;
-  isOpen: boolean;
-  dark?: boolean;
-  language: 'zh' | 'en';
-  onToggle: () => void;
-  onChange: (value: number) => void;
-}) {
-  const label = language === 'zh' ? '高速存储' : 'High-speed storage';
-  const storageOptions = STORAGE_OPTIONS[planKey];
-
-  return (
-    <div className={`plan-storage-selector ${dark ? 'dark' : ''}`}>
-      <button
-        type="button"
-        className="plan-storage-trigger"
-        aria-expanded={isOpen}
-        aria-label={`${label} ${formatStorage(value)}`}
-        onClick={onToggle}
-      >
-        <span className="plan-storage-trigger-copy">
-          <strong>{label} {formatStorage(value)}</strong>
-        </span>
-        <ChevronDown className={`h-4 w-4 ${isOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
-      </button>
-      {isOpen ? (
-        <div className="plan-storage-options" role="radiogroup" aria-label={label}>
-          {storageOptions.map((storageGb) => (
-            <button
-              key={storageGb}
-              type="button"
-              role="radio"
-              aria-checked={value === storageGb}
-              className={`plan-storage-option ${value === storageGb ? 'selected' : ''}`}
-              onClick={() => onChange(storageGb)}
-            >
-              <span className="plan-storage-option-capacity">{formatStorage(storageGb)}</span>
-              <span className="plan-storage-option-meta">
-                <small>{formatStoragePrice(storageGb, baseStorageGb, language)}</small>
-                {value === storageGb ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 interface PricingPageProps {
-  onOpenRecharge?: () => void;
+  onOpenRecharge?: (language?: 'zh' | 'en') => void;
   language?: 'zh' | 'en';
   upgradeOnly?: boolean;
 }
 
 export function PricingPage({ onOpenRecharge, language: controlledLanguage, upgradeOnly = false }: PricingPageProps) {
-  const { market } = useBilling();
-  if (market === 'domestic') return <DomesticBilling upgradeOnly={upgradeOnly} />;
-  return <InternationalPricingPage onOpenRecharge={onOpenRecharge} language={controlledLanguage} />;
+  const { market, revision } = useBilling();
+  if (market === 'domestic') return <DomesticBilling upgradeOnly={upgradeOnly} onOpenRecharge={onOpenRecharge} />;
+  return <InternationalPricingPage key={revision} onOpenRecharge={onOpenRecharge} language={controlledLanguage} />;
 }
 
 function InternationalPricingPage({ onOpenRecharge, language: controlledLanguage }: PricingPageProps) {
   const { language: contextLanguage } = useLanguage();
   const language = controlledLanguage ?? contextLanguage;
-  const [billingCycle, setBillingCycle] = React.useState<BillingCycle>('monthly');
-  const [maxTier, setMaxTier] = React.useState<MaxTier>('x2');
-  const [topUpPlan, setTopUpPlan] = React.useState<'plus' | 'pro' | 'maxX2' | 'maxX5'>('pro');
-  const [openStoragePlan, setOpenStoragePlan] = React.useState<StoragePlanKey | null>(null);
-  const [planStorage, setPlanStorage] = React.useState<Record<StoragePlanKey, number>>({
-    pro: 50,
-    maxX2: 100,
-    maxX5: 250,
+  const { subscription } = useBilling();
+  const active = Boolean(subscription.end && Date.parse(subscription.end) > Date.now());
+  const currentRank = active ? domesticPlanRank(subscription.plan) : -1;
+  const [paymentMethod, setPaymentMethod] = React.useState<PricingPaymentMethodId>(subscription.paymentMethod ?? 'airwallex');
+  const [checkout, setCheckout] = React.useState<PricingQuote | null>(null);
+  const checkoutTrigger = React.useRef<HTMLButtonElement | null>(null);
+  const [billingCycle, setBillingCycle] = React.useState<BillingCycle>(active ? subscription.renewalPeriod ?? 'monthly' : 'monthly');
+  const [maxTier, setMaxTier] = React.useState<MaxTier>(active && subscription.plan === 'max5' ? 'x5' : 'x2');
+  React.useEffect(() => {
+    if (active && (subscription.plan === 'max' || subscription.plan === 'max5')) {
+      setMaxTier(subscription.plan === 'max5' ? 'x5' : 'x2');
+    }
+  }, [active, subscription.plan]);
+  const [planStorage, setPlanStorage] = React.useState<Record<StoragePlanKey, number>>(() => {
+    const initial = { pro: 50, maxX2: 100, maxX5: 250 };
+    const key = subscription.plan === 'max' ? 'maxX2' : subscription.plan === 'max5' ? 'maxX5' : subscription.plan;
+    if (active && key !== 'plus' && subscription.storageGb && STORAGE_OPTIONS[key].includes(subscription.storageGb)) initial[key] = subscription.storageGb;
+    return initial;
   });
   const isAnnual = billingCycle === 'annual';
   const text = (localized: LocalizedText) => copy(localized, language);
-  const activeMaxPlan = maxPlans[maxTier];
-  const activeMaxStorageKey: StoragePlanKey = maxTier === 'x2' ? 'maxX2' : 'maxX5';
-  const activeMaxBaseStorage = maxTier === 'x2' ? 100 : 250;
-  const activeMaxStorage = planStorage[activeMaxStorageKey];
-  const activeMaxName = maxTier === 'x2' ? 'Max x2' : 'Max x5';
-  const topUpPlans = {
-    plus: { name: 'Plus', price: planPrices.plus.monthly, credits: 20_000 },
-    pro: { name: 'Pro', price: planPrices.pro.monthly, credits: 200_000 },
-    maxX2: { name: 'Max x2', price: maxPlans.x2.price, credits: 400_000 },
-    maxX5: { name: 'Max x5', price: maxPlans.x5.price, credits: 1_000_000 },
-  };
-  const activeTopUpPlan = topUpPlans[topUpPlan];
-  const topUpPrice: LocalizedPrice = {
-    zh: roundMoney((activeTopUpPlan.price.zh / activeTopUpPlan.credits) * TOP_UP_CREDITS),
-    en: roundMoney((activeTopUpPlan.price.en / activeTopUpPlan.credits) * TOP_UP_CREDITS),
+  const selectedMaxTier = active && subscription.plan === 'max5' ? 'x5' : maxTier;
+  const activeMaxPlan = maxPlans[selectedMaxTier];
+  const activeMaxStorageKey: StoragePlanKey = selectedMaxTier === 'x2' ? 'maxX2' : 'maxX5';
+  const activeMaxBaseStorage = selectedMaxTier === 'x2' ? 100 : 250;
+  const activeMaxName = selectedMaxTier === 'x2' ? 'Max x2' : 'Max x5';
+  const plans = [
+    {
+      id: 'plus', variant: 'plus', name: 'Plus', badge: undefined,
+      ...planPrices.plus, base: 10, credits: '20,000', storageKey: null,
+      description: text({ zh: '适合每周稳定检索和轻量问答', en: 'For steady weekly search and lightweight QA' }),
+    },
+    {
+      id: 'pro', variant: 'featured', name: 'Pro', badge: text({ zh: '最受欢迎', en: 'Most popular' }),
+      ...planPrices.pro, base: 50, credits: '200,000', storageKey: 'pro',
+      description: text({ zh: '最适合日常深度研究和 Agent 任务', en: 'Best for daily deep research and Agent tasks' }),
+    },
+    {
+      id: selectedMaxTier === 'x2' ? 'max' : 'max5', variant: 'max', name: activeMaxName, badge: undefined,
+      monthly: activeMaxPlan.price, annual: activeMaxPlan.annualPrice, annualTotal: activeMaxPlan.annualTotal,
+      base: activeMaxBaseStorage, credits: activeMaxPlan.monthly, storageKey: activeMaxStorageKey,
+      description: text({ zh: '高频 Agent 使用、多项目协作和高存储需求', en: 'For frequent Agent usage, multi-project collaboration, and high storage needs' }),
+    },
+  ] as const;
+  const visiblePlans = plans.filter(plan => domesticPlanRank(plan.id) >= currentRank);
+  const openCheckout = (plan: PlanId, trigger: HTMLButtonElement) => {
+    const key = plan === 'max' ? 'maxX2' : plan === 'max5' ? 'maxX5' : plan;
+    const max = plan === 'max' ? maxPlans.x2 : maxPlans.x5;
+    const base = plan === 'plus' ? 10 : plan === 'pro' ? 50 : plan === 'max' ? 100 : 250;
+    const storage = key === 'plus' ? base : planStorage[key];
+    const config = plan === 'plus' || plan === 'pro' ? planPrices[plan] : { monthly: max.price, annualTotal: max.annualTotal };
+    const extra = getExtraStoragePrice(storage, base, language);
+    const amount = isAnnual ? Math.ceil(config.annualTotal[language] + extra * 12 * ANNUAL_STORAGE_DISCOUNT) : config.monthly[language] + extra;
+    checkoutTrigger.current = trigger;
+    setCheckout({ plan, name: plan === 'plus' ? 'Plus' : plan === 'pro' ? 'Pro' : plan === 'max' ? 'Max x2' : 'Max x5', storage, cycle: billingCycle, amount });
   };
 
   return (
@@ -287,13 +203,14 @@ function InternationalPricingPage({ onOpenRecharge, language: controlledLanguage
       <PricingStyles />
 
       <main className="page">
-        <section id="plans" aria-label={text({ zh: '定价套餐', en: 'Pricing plans' })}>
+        <section id="plans" tabIndex={-1} aria-label={text({ zh: '定价套餐', en: 'Pricing plans' })}>
           <div className="section-head">
-            <h2>{text({ zh: '定价与套餐', en: 'Pricing & Plans' })}</h2>
+            <h1>{text({ zh: '会员套餐', en: 'Pricing plans' })}</h1>
             <div className="section-controls">
               <div className="billing-toggle" role="group" aria-label={text({ zh: '计费周期', en: 'Billing cycle' })}>
                 <button
                   type="button"
+                  aria-pressed={!isAnnual}
                   className={billingCycle === 'monthly' ? 'active' : ''}
                   onClick={() => setBillingCycle('monthly')}
                 >
@@ -301,6 +218,7 @@ function InternationalPricingPage({ onOpenRecharge, language: controlledLanguage
                 </button>
                 <button
                   type="button"
+                  aria-pressed={isAnnual}
                   className={billingCycle === 'annual' ? 'active' : ''}
                   onClick={() => setBillingCycle('annual')}
                 >
@@ -311,225 +229,59 @@ function InternationalPricingPage({ onOpenRecharge, language: controlledLanguage
             </div>
           </div>
 
-          <div className="pricing-grid">
-            <article className="plan plus">
-              <div className="plan-title-row">
-                <h3>Plus</h3>
-                <span className="plan-tag">{text({ zh: '最受欢迎', en: 'Most popular' })}</span>
-              </div>
-              <p className="plan-subtitle">{text({ zh: '适合每周稳定检索和轻量问答', en: 'For steady weekly search and lightweight QA' })}</p>
-              <div className="price-action">
-                <p className="price"><strong>{formatPlanPrice(isAnnual ? planPrices.plus.annual : planPrices.plus.monthly, language)}</strong><span>{text({ zh: '/ 月', en: '/ month' })}</span></p>
-                {isAnnual ? <p className="muted">{formatAnnualBilling(formatAnnualTotal(planPrices.plus.annualTotal, language), language)}</p> : null}
-                <a className="plan-cta secondary" href="#">{text({ zh: '订阅 Plus', en: 'Subscribe to Plus' })}</a>
-              </div>
-              <div className="info-list">
-                <div className="info-row">
-                  <InfoLabel label={text({ zh: '每月积分', en: 'Monthly credits' })} tooltip={text({ zh: '按订阅周期发放，到期后未使用余额将清零。', en: 'Issued per billing cycle. Unused balance expires when the cycle ends.' })} language={language} />
-                  <strong>20,000</strong>
-                </div>
-                <div className="info-row">
-                  <InfoLabel label={text({ zh: '基础高速存储', en: 'Base high-speed storage' })} tooltip={text({ zh: '新上传文件默认进入高速存储，保留满 6 个月后自动转入归档存储。', en: 'New uploads enter high-speed storage and move to archive storage after six months.' })} language={language} />
-                  <strong>10 GB</strong>
-                </div>
-              </div>
-            </article>
-
-            <article className="plan featured">
-              <div className="plan-title-row">
-                <h3>Pro</h3>
-                <span className="plan-tag">{text({ zh: '最具性价比', en: 'Best value' })}</span>
-              </div>
-              <p className="plan-subtitle">{text({ zh: '最适合日常深度研究和 Agent 任务', en: 'Best for daily deep research and Agent tasks' })}</p>
-              <div className="price-action">
-                <p className="price"><strong>{formatPlanPrice(isAnnual ? planPrices.pro.annual : planPrices.pro.monthly, language, planStorage.pro, 50, isAnnual ? ANNUAL_STORAGE_DISCOUNT : 1, isAnnual)}</strong><span>{text({ zh: '/ 月', en: '/ month' })}</span></p>
-                {isAnnual ? <p className="muted">{formatAnnualBilling(formatAnnualTotal(planPrices.pro.annualTotal, language, planStorage.pro, 50), language)}</p> : null}
-                <a className="plan-cta secondary" href="#">{text({ zh: '订阅 Pro', en: 'Subscribe to Pro' })}</a>
-                <PlanStorageSelector
-                  planKey="pro"
-                  baseStorageGb={50}
-                  value={planStorage.pro}
-                  isOpen={openStoragePlan === 'pro'}
-                  dark
-                  language={language}
-                  onToggle={() => setOpenStoragePlan((current) => current === 'pro' ? null : 'pro')}
-                  onChange={(value) => {
-                    setPlanStorage((current) => ({ ...current, pro: value }));
-                    setOpenStoragePlan(null);
-                  }}
-                />
-              </div>
-              <div className="info-list">
-                <div className="info-row">
-                  <InfoLabel label={text({ zh: '每月积分', en: 'Monthly credits' })} tooltip={text({ zh: '按订阅周期发放，到期后未使用余额将清零。', en: 'Issued per billing cycle. Unused balance expires when the cycle ends.' })} dark language={language} />
-                  <strong>200,000</strong>
-                </div>
-                <div className="info-row">
-                  <InfoLabel label={text({ zh: '基础高速存储', en: 'Base high-speed storage' })} tooltip={text({ zh: '用于 Reader、QA、Survey 和 Agent 快速调用，文件保留满 6 个月后自动归档。', en: 'Used for fast access by Reader, QA, Survey, and Agent. Files archive after six months.' })} dark language={language} />
-                  <strong>50 GB</strong>
-                </div>
-              </div>
-            </article>
-
-            <article className="plan max">
-              <div className="plan-title-row">
-                <h3>Max</h3>
-                <div className="max-tier-switch" role="tablist" aria-label={text({ zh: 'Max 规格', en: 'Max tier' })}>
-                  {(['x2', 'x5'] as MaxTier[]).map((tier) => (
-                    <button
-                      key={tier}
-                      type="button"
-                      role="tab"
-                      aria-selected={maxTier === tier}
-                      className={maxTier === tier ? 'active' : ''}
-                      onClick={() => {
-                        setMaxTier(tier);
-                        setOpenStoragePlan(null);
-                      }}
-                    >
-                      {tier}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <p className="plan-subtitle">{text({ zh: '高频 Agent 使用、多项目协作和高存储需求', en: 'For frequent Agent usage, multi-project collaboration, and high storage needs' })}</p>
-              <div className="price-action">
-                <p className="price"><strong>{formatPlanPrice(isAnnual ? activeMaxPlan.annualPrice : activeMaxPlan.price, language, activeMaxStorage, activeMaxBaseStorage, isAnnual ? ANNUAL_STORAGE_DISCOUNT : 1, isAnnual)}</strong><span>{text({ zh: '/ 月', en: '/ month' })}</span></p>
-                {isAnnual ? <p className="muted">{formatAnnualBilling(formatAnnualTotal(activeMaxPlan.annualTotal, language, activeMaxStorage, activeMaxBaseStorage), language)}</p> : null}
-                <a className="plan-cta" href="#">{text({ zh: `订阅 ${activeMaxName}`, en: `Subscribe to ${activeMaxName}` })}</a>
-                <PlanStorageSelector
-                  planKey={activeMaxStorageKey}
-                  baseStorageGb={activeMaxBaseStorage}
-                  value={activeMaxStorage}
-                  isOpen={openStoragePlan === activeMaxStorageKey}
-                  language={language}
-                  onToggle={() => setOpenStoragePlan((current) => current === activeMaxStorageKey ? null : activeMaxStorageKey)}
-                  onChange={(value) => {
-                    setPlanStorage((current) => ({ ...current, [activeMaxStorageKey]: value }));
-                    setOpenStoragePlan(null);
-                  }}
-                />
-              </div>
-              <div className="info-list">
-                <div className="info-row">
-                  <InfoLabel label={text({ zh: '每月积分', en: 'Monthly credits' })} tooltip={text({ zh: '按订阅周期发放，到期后未使用余额将清零。', en: 'Issued per billing cycle. Unused balance expires when the cycle ends.' })} language={language} />
-                  <strong>{activeMaxPlan.monthly}</strong>
-                </div>
-                <div className="info-row">
-                  <InfoLabel
-                    label={text({ zh: '基础高速存储', en: 'Base high-speed storage' })}
-                    tooltip={text({
-                      zh: `${activeMaxName} 包含 ${formatStorage(activeMaxBaseStorage)} 基础高速存储，归档存储用于长期保存低频文件。`,
-                      en: `${activeMaxName} includes ${formatStorage(activeMaxBaseStorage)} of base high-speed storage. Archive storage keeps lower-frequency files long term.`,
-                    })}
-                    language={language}
-                  />
-                  <strong>{formatStorage(activeMaxBaseStorage)}</strong>
-                </div>
-              </div>
-            </article>
+          <div className="membership-grid tiered-membership-grid">
+            {!active && <FreePlanCard language={language} current />}
+            {visiblePlans.map(plan => {
+              const storageKey = plan.storageKey;
+              const storage = storageKey ? planStorage[storageKey] : plan.base;
+              const storageLabel = text({ zh: '高速存储', en: 'High-speed storage' });
+              const planId = plan.id;
+              const isCurrent = active && subscription.plan === planId;
+              return (
+                <MembershipPlanCard key={plan.variant} variant={plan.variant}
+                  language={language} plan={storageKey ?? 'plus'}
+                  name={plan.variant === 'max' ? 'Max' : plan.name} badge={plan.badge}
+                  topUp={isCurrent ? <CreditTopUpDrawer language={language} /> : undefined}
+                  tierSwitch={plan.variant === 'max' && <div className="max-tier-switch" role="group" aria-label={text({ zh: 'Max 规格', en: 'Max tier' })}>
+                    {(['x2', 'x5'] as const).filter(tier => domesticPlanRank(tier === 'x2' ? 'max' : 'max5') >= currentRank).map(tier => <button key={tier} type="button" aria-pressed={selectedMaxTier === tier}
+                      className={selectedMaxTier === tier ? 'active' : ''} onClick={() => setMaxTier(tier)}>{tier}</button>)}
+                  </div>}
+                  price={isAnnual ? formatAnnualTotal(plan.annualTotal, language, storage, plan.base) : formatPlanPrice(plan.monthly, language, storage, plan.base)}
+                  unit={isAnnual ? text({ zh: '/ 年', en: '/ year' }) : text({ zh: '/ 月', en: '/ month' })}
+                  credits={plan.credits}
+                  description={plan.description}
+                  storage={<StorageChoice title={storageLabel}
+                    label={`${plan.name} ${storageLabel}`} options={storageKey ? STORAGE_OPTIONS[storageKey] : [plan.base]}
+                    value={storage} formatCapacity={formatStorage} formatFee={gb => formatStoragePrice(gb, plan.base, language, isAnnual)}
+                    onChange={gb => storageKey && setPlanStorage(current => ({ ...current, [storageKey]: gb }))} />}
+                  action={<button type="button" className="plan-cta secondary" disabled={isCurrent}
+                    onClick={event => openCheckout(planId, event.currentTarget)}>
+                    {isCurrent ? text({ zh: '当前套餐', en: 'Current plan' }) : text({ zh: `选择 ${plan.name}`, en: `Choose ${plan.name}` })}
+                  </button>}
+                >
+                </MembershipPlanCard>
+              );
+            })}
           </div>
 
-          <section className="subscription-management" aria-labelledby="subscription-management-title">
-            <div className="subscription-management-head">
-              <h3 id="subscription-management-title">{text({ zh: '会员信息', en: 'Membership' })}</h3>
-              <span>{text({ zh: '当前订阅由 Stripe 管理', en: 'Current subscription is managed by Stripe' })}</span>
-            </div>
-            <div className="subscription-management-grid">
-              <div className="subscription-management-item">
-                <span className="subscription-label">{text({ zh: '当前会员', en: 'Current membership' })}</span>
-                <span className="subscription-value">Pro · {text({ zh: '月付', en: 'Monthly' })}</span>
-                <span className="subscription-note">{text({ zh: '2026 年 7 月 10 日到期', en: 'Expires Jul 10, 2026' })}</span>
-              </div>
-              <div className="subscription-management-item">
-                <span className="subscription-label">{text({ zh: '连续订阅', en: 'Auto-renew' })}</span>
-                <div className="renew-switch active" role="status" aria-label={text({ zh: '连续订阅已开启', en: 'Auto-renew is on' })}>
-                  <span className="renew-track" aria-hidden="true" />
-                  <span className="subscription-value">{text({ zh: '已开启', en: 'On' })}</span>
-                </div>
-                <span className="subscription-note">{text({ zh: '下个周期自动续费', en: 'Renews next billing cycle' })}</span>
-              </div>
-              <div className="subscription-management-item">
-                <span className="subscription-label">{text({ zh: '支付方式', en: 'Payment method' })}</span>
-                <div className="locked-payment">
-                  <span className="card-brand">VISA</span>
-                  <span className="subscription-value">Visa ···· 4242</span>
-                </div>
-                <span className="subscription-note">{text({ zh: '订阅期间不可更改', en: 'Locked while subscribed' })}</span>
-              </div>
-              <div className="subscription-management-item">
-                <span className="subscription-label">{text({ zh: '订阅管理', en: 'Subscription actions' })}</span>
-                <button type="button" className="cancel-subscription-button">
-                  {text({ zh: '取消订阅', en: 'Cancel subscription' })}
-                </button>
-                <span className="subscription-note">{text({ zh: '取消后可更换支付方式', en: 'Change payment after canceling' })}</span>
-              </div>
-            </div>
-          </section>
-
-          <section className="recharge-products-section" aria-label={text({ zh: '充值包商品', en: 'Credit pack products' })}>
-            <div className="recharge-products-grid">
-              <article className="plan mini-pack">
-              <div className="plan-title-row">
-                <h3>10K Credits Pack</h3>
-              </div>
-              <p className="plan-subtitle">{text({ zh: '唯一充值规格，价格按会员月度订阅单价等比例计算', en: 'One top-up size, priced proportionally to each plan’s monthly subscription rate' })}</p>
-              <div className="price-action">
-                <p className="price"><strong>{formatPlanPrice(topUpPrice, language)}</strong><span>{text({ zh: `一次性 · ${activeTopUpPlan.name} 会员价`, en: `one-time · ${activeTopUpPlan.name} member price` })}</span></p>
-                <p className="muted">{TOP_UP_CREDITS.toLocaleString()} Credits</p>
-                <a
-                  className="plan-cta"
-                  href="#"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    onOpenRecharge?.();
-                  }}
-                >
-                  {text({ zh: '立即充值', en: 'Recharge now' })}
-                </a>
-              </div>
-              <label className="mt-4 block text-sm text-slate-600">{text({ zh: '会员计价等级', en: 'Member pricing tier' })}
-                <select aria-label={text({ zh: '充值包会员计价等级', en: 'Top-up member pricing tier' })} value={topUpPlan} onChange={(event) => setTopUpPlan(event.target.value as typeof topUpPlan)} className="mt-2 w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-900">
-                  {Object.entries(topUpPlans).map(([id, plan]) => {
-                    const price = roundMoney((plan.price[language] / plan.credits) * TOP_UP_CREDITS);
-                    return <option key={id} value={id}>{plan.name} · {formatCurrency(price, language)}</option>;
-                  })}
-                </select>
-              </label>
-              <div className="info-list">
-                <div className="info-row">
-                  <span className="uber-info-label">{text({ zh: '包含积分', en: 'Credits included' })}</span>
-                  <strong>{TOP_UP_CREDITS.toLocaleString()}</strong>
-                </div>
-                <div className="info-row">
-                  <span className="uber-info-label">{text({ zh: '定价公式', en: 'Pricing formula' })}</span>
-                  <strong>{text({ zh: '订阅价 ÷ 月度积分 × 10,000', en: 'Plan price ÷ monthly credits × 10,000' })}</strong>
-                </div>
-                <div className="info-row">
-                  <span className="uber-info-label">{text({ zh: '有效期', en: 'Validity' })}</span>
-                  <strong>{text({ zh: '一年有效', en: 'Valid for one year' })}</strong>
-                </div>
-              </div>
-              </article>
-            </div>
-          </section>
-
+          <div className="pricing-account-slot" id="pricing-account" tabIndex={-1}>
+            {active
+              ? <MembershipSummary subscription={subscription} language={language} />
+              : <PaymentMethodSelector value={paymentMethod} onChange={setPaymentMethod} language={language} />}
+          </div>
         </section>
 
         <section className="redeem-section" aria-label={text({ zh: '兑换会员码', en: 'Redeem membership code' })}>
           <h2>{text({ zh: '兑换会员码', en: 'Redeem membership code' })}</h2>
-          <p className="redeem-note">
-            {text({ zh: '不限量功能仅供个人正常使用。自动脚本或异常高频调用可能触发临时限制。', en: 'Unmetered features are designed for individual human use. Automated scripts or excessive volume may trigger temporary limits.' })}
-          </p>
           <div className="redeem-ticket">
-            <input className="redeem-input" value="WISP2025" readOnly aria-label={text({ zh: '会员码', en: 'Membership code' })} />
+            <input className="redeem-input" placeholder={text({ zh: '输入会员码', en: 'Enter membership code' })} aria-label={text({ zh: '会员码', en: 'Membership code' })} />
             <button type="button" className="redeem-button">{text({ zh: '立即兑换', en: 'Redeem Now' })}</button>
           </div>
         </section>
 
         <section className="compare" aria-labelledby="compare-title">
           <div className="section-head">
-            <h2 id="compare-title">{text({ zh: '套餐对比', en: 'Compare plans' })}</h2>
+            <h2 id="compare-title">{text({ zh: '套餐权益对比', en: 'Compare plans' })}</h2>
           </div>
           <div className="table-shell">
             <table>
@@ -537,10 +289,10 @@ function InternationalPricingPage({ onOpenRecharge, language: controlledLanguage
                 <tr>
                   <th>{text({ zh: '订阅计划', en: 'Subscription plan' })}</th>
                   <th>Free</th>
-                  <th>Plus<a className="table-plan-action" href="#">{text({ zh: '升级 ↗', en: 'Upgrade ↗' })}</a></th>
-                  <th>Pro<a className="table-plan-action" href="#">{text({ zh: '升级 ↗', en: 'Upgrade ↗' })}</a></th>
-                  <th>Max x2<a className="table-plan-action" href="#">{text({ zh: '升级 ↗', en: 'Upgrade ↗' })}</a></th>
-                  <th>Max x5<a className="table-plan-action" href="#">{text({ zh: '升级 ↗', en: 'Upgrade ↗' })}</a></th>
+                  <th>Plus<button type="button" className="table-plan-action" disabled={active && subscription.plan === 'plus'} onClick={event => openCheckout('plus', event.currentTarget)}>{active && subscription.plan === 'plus' ? text({ zh: '当前套餐', en: 'Current plan' }) : text({ zh: '选择 ↗', en: 'Choose ↗' })}</button></th>
+                  <th>Pro<button type="button" className="table-plan-action" disabled={active && subscription.plan === 'pro'} onClick={event => openCheckout('pro', event.currentTarget)}>{active && subscription.plan === 'pro' ? text({ zh: '当前套餐', en: 'Current plan' }) : text({ zh: '选择 ↗', en: 'Choose ↗' })}</button></th>
+                  <th>Max x2<button type="button" className="table-plan-action" disabled={active && subscription.plan === 'max'} onClick={event => openCheckout('max', event.currentTarget)}>{active && subscription.plan === 'max' ? text({ zh: '当前套餐', en: 'Current plan' }) : text({ zh: '选择 ↗', en: 'Choose ↗' })}</button></th>
+                  <th>Max x5<button type="button" className="table-plan-action" disabled={active && subscription.plan === 'max5'} onClick={event => openCheckout('max5', event.currentTarget)}>{active && subscription.plan === 'max5' ? text({ zh: '当前套餐', en: 'Current plan' }) : text({ zh: '选择 ↗', en: 'Choose ↗' })}</button></th>
                 </tr>
               </thead>
               <tbody>
@@ -562,29 +314,27 @@ function InternationalPricingPage({ onOpenRecharge, language: controlledLanguage
         <section className="faq" aria-labelledby="faq-title">
           <h2 id="faq-title">{text({ zh: '定价常见问题', en: 'Pricing FAQ' })}</h2>
           <div className="faq-list">
-            <div className="faq-row">
-              <h3>{text({ zh: '积分如何消耗？', en: 'How are credits consumed?' })}</h3>
+            <details className="faq-row" open><summary>{text({ zh: '积分如何消耗？', en: 'How are credits consumed?' })}</summary>
               <p>{text({ zh: '积分用于 Search、Survey、QA、Feeds 和 Agent 等任务，不同任务会根据复杂度消耗不同积分。', en: 'Credits are used for Search, Survey, QA, Feeds, Agent, and related tasks. Each task consumes credits based on complexity.' })}</p>
-            </div>
-            <div className="faq-row">
-              <h3>{text({ zh: '高速存储和归档存储有什么区别？', en: 'What is the difference between high-speed and archive storage?' })}</h3>
+            </details>
+            <details className="faq-row"><summary>{text({ zh: '高速存储和归档存储有什么区别？', en: 'What is the difference between high-speed and archive storage?' })}</summary>
               <p>{text({ zh: '高速存储用于近期活跃文件，可被 Reader、QA、Survey 和 Agent 快速调用；归档存储用于长期保存低频文件，恢复到高速存储后才能用于高频任务。', en: 'High-speed storage keeps active files ready for Reader, QA, Survey, and Agent. Archive storage keeps lower-frequency files long term and requires restoration before high-frequency tasks.' })}</p>
-            </div>
-            <div className="faq-row">
-              <h3>{text({ zh: '文件什么时候会自动归档？', en: 'When are files archived automatically?' })}</h3>
+            </details>
+            <details className="faq-row"><summary>{text({ zh: '文件什么时候会自动归档？', en: 'When are files archived automatically?' })}</summary>
               <p>{text({ zh: '文件进入高速存储满 6 个月后会自动迁移至归档存储并释放额度；恢复文件后，6 个月保留期将重新计算。', en: 'Files move to archive storage after six months in high-speed storage, releasing capacity. Restoring a file restarts the six-month period.' })}</p>
-            </div>
-            <div className="faq-row">
-              <h3>{text({ zh: '高速存储规格如何计费和调整？', en: 'How is the high-speed storage tier billed and changed?' })}</h3>
+            </details>
+            <details className="faq-row"><summary>{text({ zh: '高速存储规格如何计费和调整？', en: 'How is the high-speed storage tier billed and changed?' })}</summary>
               <p>{text({ zh: '存储规格与会员套餐使用相同支付方式，并随会员统一续期。升级容量立即生效；降低容量将在下个计费周期生效。', en: 'The storage tier uses the membership payment method and renews with the plan. Upgrades take effect immediately; reductions take effect next cycle.' })}</p>
-            </div>
-            <div className="faq-row">
-              <h3>{text({ zh: '充值包和套餐积分有什么区别？', en: 'How are top-up packs different from plan credits?' })}</h3>
+            </details>
+            <details className="faq-row"><summary>{text({ zh: '充值包和套餐积分有什么区别？', en: 'How are top-up packs different from plan credits?' })}</summary>
               <p>{text({ zh: '套餐积分按周期发放，充值包用于按需补充 Credits；付费套餐可享对应充值折扣。', en: 'Plan credits are issued by billing cycle. Top-up packs add Credits on demand, and paid plans receive their corresponding top-up discounts.' })}</p>
-            </div>
+            </details>
           </div>
         </section>
       </main>
+      {checkout && <PricingCheckout quote={checkout} language={language} method={paymentMethod}
+        onMethodChange={setPaymentMethod} onClose={() => setCheckout(null)}
+        returnFocus={() => { const target = checkoutTrigger.current; if (target && !target.disabled) target.focus(); else document.getElementById('pricing-account')?.focus(); }} />}
     </div>
   );
 }
