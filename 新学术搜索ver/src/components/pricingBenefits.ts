@@ -12,6 +12,8 @@ export const modelAccess = {
 
 const everyone = { free: true, plus: true, pro: true, maxX2: true, maxX5: true };
 const paid = { ...everyone, free: false };
+const proAndAbove = { ...paid, plus: false };
+const maxOnly = { ...proAndAbove, pro: false };
 export type MembershipTier = keyof typeof everyone;
 type ResearchBenefit = Record<MembershipTier, boolean> & {
   label: { zh: string; en: string };
@@ -24,10 +26,14 @@ export const researchBenefits: ResearchBenefit[] = [
   { label: { zh: '深度搜索', en: 'Deep search' }, ...everyone },
   { label: { zh: '灵感发现', en: 'Idea discovery' }, ...paid },
   { label: { zh: '文献综述', en: 'Literature review' }, ...everyone, limits: { free: 10, plus: 30, pro: 100 } },
-  { label: { zh: '论文评审', en: 'Peer review' }, ...paid },
+  { label: { zh: '论文评审', en: 'Peer review' }, ...everyone },
   { label: { zh: 'PPT 创作', en: 'Slide creation' }, ...everyone },
-  { label: { zh: '论文复现', en: 'Paper reproduction' }, exclusive: true, ...paid, plus: false },
-  { label: { zh: '优先体验新功能', en: 'Early access to new features' }, supplementary: true, ...paid, plus: false, pro: false },
+  { label: { zh: '国自然申请', en: 'NSFC proposal' }, ...paid },
+  { label: { zh: 'Idea 升华', en: 'Idea refinement' }, ...proAndAbove },
+  { label: { zh: '论文复现', en: 'Paper reproduction' }, exclusive: true, ...proAndAbove },
+  { label: { zh: '配置 GPU', en: 'GPU provisioning' }, ...proAndAbove },
+  { label: { zh: '顺藤摸瓜', en: 'Citation exploration' }, ...maxOnly },
+  { label: { zh: '优先体验新功能', en: 'Early access to new features' }, supplementary: true, ...maxOnly },
 ];
 
 const comparisonValue = (feature: ResearchBenefit, plan: MembershipTier) => {
@@ -45,10 +51,7 @@ export const commonToolComparisonRows = [
   { zh: '快速搜索', en: 'Quick search' },
   { zh: 'Ask AI', en: 'Ask AI' },
   { zh: '论文主图', en: 'Paper figure' },
-  { zh: 'Idea 升华', en: 'Idea refinement' },
   { zh: 'LaTeX 写作', en: 'LaTeX writing' },
-  { zh: '顺藤摸瓜', en: 'Citation exploration' },
   { zh: '引用核查', en: 'Citation check' },
-  { zh: '国自然申请', en: 'NSFC proposal' },
   { zh: '论文图片格式转换', en: 'Paper image format conversion' },
 ].map(label => ({ label, ...everyone }));
