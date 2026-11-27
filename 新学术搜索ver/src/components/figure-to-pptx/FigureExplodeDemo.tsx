@@ -1,5 +1,7 @@
 import React from 'react';
 import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from 'remotion';
+import { PptxDemoWindow } from './PptxDemoWindow';
+import { DemoPointer } from './DemoPointer';
 
 const clamp = {
   extrapolateLeft: 'clamp' as const,
@@ -160,29 +162,11 @@ function SelectionHandles({ left, top, width, height, opacity }: { left: number;
 
 function Cursor({ frame }: { frame: number }) {
   return (
-    <svg
-      width="28"
-      height="32"
-      viewBox="0 0 28 32"
-      fill="none"
-      style={{
-        position: 'absolute',
-        left: interpolate(frame, [4, 12, 34, 124, 138, 151, 164, 176], [76, 96, 336, 526, 600, 742, 680, 680], {
-          ...clamp,
-          easing: ease,
-        }),
-        top: interpolate(frame, [4, 12, 34, 124, 138, 151, 164, 176], [92, 126, 308, 120, 150, 150, 244, 244], {
-          ...clamp,
-          easing: ease,
-        }),
-        opacity: interpolate(frame, [0, 5, 172, 179], [0, 1, 1, 0], clamp),
-        filter: 'drop-shadow(0 3px 4px rgba(34,38,44,0.18))',
-        zIndex: 60,
-      }}
-      aria-hidden="true"
-    >
-      <path d="M3 2.5L23.5 17.5L14.8 19.2L19.7 28.2L15.2 30.4L10.4 21.2L4.3 27.3L3 2.5Z" fill="#22262c" stroke="white" strokeWidth="2.2" strokeLinejoin="round" />
-    </svg>
+    <DemoPointer
+      left={interpolate(frame, [4, 12, 34, 124, 138, 151, 164, 176], [76, 96, 336, 526, 600, 742, 680, 680], { ...clamp, easing: ease })}
+      top={interpolate(frame, [4, 12, 34, 124, 138, 151, 164, 176], [92, 126, 308, 120, 150, 150, 244, 244], { ...clamp, easing: ease })}
+      opacity={interpolate(frame, [0, 5, 172, 179], [0, 1, 1, 0], clamp)}
+    />
   );
 }
 
@@ -260,39 +244,7 @@ export function FigureExplodeDemo() {
         </div>
       </div>
 
-      <div
-        style={{
-          position: 'absolute',
-          left: 500,
-          top: 70,
-          width: 370,
-          height: 280,
-          borderRadius: 18,
-          background: 'rgba(249,250,252,0.9)',
-          border: '1px solid rgba(201,216,229,0.88)',
-          boxShadow: '0 22px 54px rgba(61,92,126,0.09)',
-          opacity: interpolate(frame, [0, 20, 92, 112], [0.62, 0.68, 0.82, 1], clamp),
-        }}
-      >
-        <div style={{ position: 'absolute', inset: '0 0 auto', height: 34, borderBottom: '1px solid #e8edf1', background: 'rgba(255,255,255,0.86)', borderRadius: '18px 18px 0 0' }}>
-          <span style={{ position: 'absolute', left: 14, top: 10, width: 14, height: 14, borderRadius: 4, background: '#d9735d' }} />
-          <div style={{ position: 'absolute', left: 40, top: 14, display: 'flex', gap: 8 }}>
-            {[18, 24, 16, 22].map((width, index) => <span key={index} style={{ width, height: 5, borderRadius: 99, background: index === 0 ? '#d8e0e7' : '#e8edf1' }} />)}
-          </div>
-        </div>
-        <div style={{ position: 'absolute', left: 0, top: 34, bottom: 0, width: 54, borderRight: '1px solid #e6ebef', background: 'rgba(244,246,248,0.86)', borderRadius: '0 0 0 18px' }}>
-          {[50, 112, 174].map((top, index) => (
-            <span key={top} style={{ position: 'absolute', left: 10, top: top - 34, width: 34, height: 22, borderRadius: 4, background: 'white', border: index === 0 ? '1.5px solid #d9735d' : '1px solid #dfe6eb', boxShadow: '0 2px 6px rgba(61,92,126,0.05)' }}>
-              <i style={{ position: 'absolute', left: 5, top: 5, width: 19, height: 3, borderRadius: 99, background: '#e5ebef' }} />
-              <i style={{ position: 'absolute', left: 5, top: 11, width: 12, height: 3, borderRadius: 99, background: '#edf1f4' }} />
-            </span>
-          ))}
-        </div>
-        <div style={{ position: 'absolute', left: 68, top: 50, width: 286, height: 164, borderRadius: 5, background: 'white', border: '1px solid #e0e6eb', boxShadow: '0 8px 22px rgba(61,92,126,0.08)' }} />
-        <div style={{ position: 'absolute', left: 68, right: 16, bottom: 17, height: 6, borderRadius: 99, background: '#eef1f4' }}>
-          <span style={{ display: 'block', width: '46%', height: '100%', borderRadius: 99, background: '#d7dee5' }} />
-        </div>
-      </div>
+      <PptxDemoWindow opacity={interpolate(frame, [0, 20, 92, 112], [0.62, 0.68, 0.82, 1], clamp)} />
 
       <div
         style={{
