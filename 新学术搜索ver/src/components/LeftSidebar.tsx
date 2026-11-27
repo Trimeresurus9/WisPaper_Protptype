@@ -105,6 +105,15 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenUpg
   const { t } = useLanguage();
 
   React.useEffect(() => {
+    if (currentView !== 'tools' && currentView !== 'image-to-pptx') return;
+    const narrowScreen = window.matchMedia('(max-width: 680px)');
+    const collapseOnNarrowScreen = () => { if (narrowScreen.matches) setIsCollapsed(true); };
+    collapseOnNarrowScreen();
+    narrowScreen.addEventListener('change', collapseOnNarrowScreen);
+    return () => narrowScreen.removeEventListener('change', collapseOnNarrowScreen);
+  }, [currentView]);
+
+  React.useEffect(() => {
     if (currentView === 'workspace-home') {
       setActiveNav('workspace-home');
     } else if (currentView === 'explore') {
@@ -132,7 +141,7 @@ export function LeftSidebar({ onNavigate, onOpenInvite, onOpenPaywall, onOpenUpg
       setActiveNav('research-canvas');
     } else if (currentView === 'institution-admin') {
       setActiveNav('institution-admin');
-    } else if (currentView === 'truecite' || currentView === 'tools' || currentView === 'figure-to-pptx' || currentView === 'figure-to-excel' || currentView === 'excel-to-figure') {
+    } else if (currentView === 'truecite' || currentView === 'tools' || currentView === 'figure-to-pptx' || currentView === 'image-to-pptx' || currentView === 'figure-to-excel' || currentView === 'excel-to-figure') {
       setActiveNav('tools');
     } else if (currentView === 'list') {
       setActiveNav('scholar-search');

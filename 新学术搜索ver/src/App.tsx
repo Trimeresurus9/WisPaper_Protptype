@@ -23,6 +23,8 @@ import { ResearchProjects } from "./components/ResearchProjects";
 import { ResearchCanvas } from "./components/ResearchCanvas";
 import { InstitutionManagement } from "./components/InstitutionManagement";
 import { FigureToPPTX } from "./components/FigureToPPTX";
+import { ImageToPPTX } from "./components/ImageToPPTX";
+import { useMockCredits } from "./utils/mockCredits";
 import { ExcelToFigure } from "./components/ExcelToFigure";
 import { ToolsPage } from "./components/ToolsPage";
 import { MockConsole } from "./components/MockConsole";
@@ -67,6 +69,7 @@ const viewRoutes: Record<string, string> = {
   truecite: '/app/truecite',
   tools: '/app/tools',
   'figure-to-pptx': '/app/tools/figure-to-pptx',
+  'image-to-pptx': '/app/tools/image-to-pptx',
   'figure-to-excel': '/app/tools/figure-to-excel',
   'excel-to-figure': '/app/tools/excel-to-figure',
 };
@@ -137,7 +140,7 @@ export default function App() {
     useState<Paper | null>(readSelectedPaper);
   const initialView = typeof window !== 'undefined' ? (['tickets', 'feedback'].includes(new URLSearchParams(window.location.search).get('mock') ?? '') ? 'all-feeds' : getViewFromPath(window.location.pathname)) : 'home';
   const [viewMode, setViewMode] = useState<
-    "home" | "workspace-home" | "home-search-preview" | "home-agent-preview" | "home-agent-case" | "explore" | "list" | "quick-paper" | "detail" | "reader" | "library" | "scholar-qa" | "all-feeds" | "paper-reproduction" | "idea-discovery" | "fudan-collection-search" | "academic-agent" | "research-projects" | "research-canvas" | "truecite" | "tools" | "figure-to-pptx" | "figure-to-excel" | "excel-to-figure" | "institution-admin"
+    "home" | "workspace-home" | "home-search-preview" | "home-agent-preview" | "home-agent-case" | "explore" | "list" | "quick-paper" | "detail" | "reader" | "library" | "scholar-qa" | "all-feeds" | "paper-reproduction" | "idea-discovery" | "fudan-collection-search" | "academic-agent" | "research-projects" | "research-canvas" | "truecite" | "tools" | "figure-to-pptx" | "image-to-pptx" | "figure-to-excel" | "excel-to-figure" | "institution-admin"
   >(initialView as any);
   // Prototype role only; actual authorization must be enforced by the server.
   const [mockRole] = useState<'org_admin' | 'user'>(() =>
@@ -176,7 +179,7 @@ export default function App() {
     try { sessionStorage.setItem(HOME_SESSION_KEY, JSON.stringify(session)); } catch {}
     setHomeSignedIn(true);
   };
-  const [mockUserCredits, setMockUserCredits] = useState(50000);
+  const { credits: mockUserCredits, setCredits: setMockUserCredits, isDownloadPaid, payForDownload } = useMockCredits();
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [showNotificationDrawer, setShowNotificationDrawer] = useState(false);
   const [readerInitialFile, setReaderInitialFile] = useState<File | null>(null);
@@ -439,7 +442,7 @@ export default function App() {
 
       <div className={`${isHomeFlow ? "wh-shell " : ""}${isReaderView ? "h-screen overflow-hidden bg-white flex" : "min-h-screen bg-white flex"}`}>
         {/* Left Sidebar - Only show in list view, library view, and scholar-qa view */}
-        {(isHomeFlow || viewMode === "explore" || viewMode === "list" || viewMode === "reader" || viewMode === "library" || viewMode === "scholar-qa" || viewMode === "all-feeds" || viewMode === "paper-reproduction" || viewMode === "idea-discovery" || viewMode === "fudan-collection-search" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "truecite" || viewMode === "tools" || viewMode === "figure-to-pptx" || viewMode === "figure-to-excel" || viewMode === "excel-to-figure" || viewMode === "institution-admin") && viewMode !== "home-agent-case" && !(viewMode === "academic-agent" && (agentTaskActive || isGuestAgent)) && (
+        {(isHomeFlow || viewMode === "explore" || viewMode === "list" || viewMode === "reader" || viewMode === "library" || viewMode === "scholar-qa" || viewMode === "all-feeds" || viewMode === "paper-reproduction" || viewMode === "idea-discovery" || viewMode === "fudan-collection-search" || viewMode === "academic-agent" || viewMode === "research-projects" || viewMode === "research-canvas" || viewMode === "truecite" || viewMode === "tools" || viewMode === "figure-to-pptx" || viewMode === "image-to-pptx" || viewMode === "figure-to-excel" || viewMode === "excel-to-figure" || viewMode === "institution-admin") && viewMode !== "home-agent-case" && !(viewMode === "academic-agent" && (agentTaskActive || isGuestAgent)) && (
           <LeftSidebar
             onNavigate={handleWorkspaceNavigate}
             onOpenInvite={() => setShowInviteModal(true)}
@@ -659,6 +662,7 @@ export default function App() {
           ) : viewMode === "tools" ? (
             <ToolsPage
               onOpenTrueCite={() => setViewMode('truecite')}
+              onOpenImageToPPTX={() => setViewMode('image-to-pptx')}
               onOpenFigureToPPTX={() => { setFigureToPPTXFromReader(false); setViewMode('figure-to-pptx'); }}
               onOpenFigureToExcel={() => { setFigureToPPTXFromReader(false); setViewMode('figure-to-excel'); }}
               onOpenExcelToFigure={() => setViewMode('excel-to-figure')}
@@ -669,6 +673,8 @@ export default function App() {
               onBackToTools={() => { setFigureToPPTXFromReader(false); setViewMode('tools'); }}
               onBackToReader={() => { setFigureToPPTXFromReader(false); setViewMode('reader'); }}
             />
+          ) : viewMode === "image-to-pptx" ? (
+            <ImageToPPTX onBackToTools={() => setViewMode('tools')} isDownloadPaid={isDownloadPaid} payForDownload={payForDownload} />
           ) : viewMode === "figure-to-excel" ? (
             <FigureToPPTX
               output="excel"

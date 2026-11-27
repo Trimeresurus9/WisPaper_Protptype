@@ -2,6 +2,7 @@ import React from 'react';
 import { Composition, registerRoot } from 'remotion';
 import { FigureExplodeDemo } from './components/figure-to-pptx/FigureExplodeDemo';
 import { FigureToExcelDemo } from './components/figure-to-pptx/FigureToExcelDemo';
+import { ImageToPptxDemo, imageToPptxDemoFrames } from './components/image-to-pptx/ImageToPptxDemo';
 
 function FigureGifCanvas() {
   return (
@@ -50,6 +51,14 @@ function FigureExcelGifCanvas() {
 function FigureGifRoot() {
   return (
     <>
+      <Composition
+        id="ImageToPptx"
+        component={ImageToPptxDemo}
+        durationInFrames={imageToPptxDemoFrames}
+        fps={30}
+        width={900}
+        height={420}
+      />
       <Composition
         id="FigureToPptxGif"
         component={FigureGifCanvas}
